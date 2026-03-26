@@ -4,12 +4,12 @@ import SwiftUI
 
 struct MenuBarView: View {
     @ObservedObject var manager: VolumeManager
-    @State private var newRemotePath: String = ""
-    @State private var newMountPoint: String = ""
+    @State private var newRemotePath = ""
+    @State private var newMountPoint = ""
     @State private var showSettings = false
     @State private var showAddForm = false
     @State private var logVolume: LogViewerIdentifiable?
-    @State private var searchText: String = ""
+    @State private var searchText = ""
 
     private var hasAnyUnmounted: Bool {
         manager.hostVolumes.values.flatMap { $0 }.contains { !$0.isMounted }
@@ -19,16 +19,24 @@ struct MenuBarView: View {
         manager.hostVolumes.values.flatMap { $0 }.contains { $0.isMounted }
     }
 
+    private var hasFavorites: Bool {
+        manager.hostVolumes.values.flatMap { $0 }.contains { $0.isFavorite }
+    }
+
+    private var hasUnmountedFavorites: Bool {
+        manager.hostVolumes.values.flatMap { $0 }.contains { $0.isFavorite && !$0.isMounted }
+    }
+
     private var filteredHosts: [SSHHost] {
         let hosts = manager.orderedHostsWithVolumes
         guard !searchText.isEmpty else { return hosts }
         let q = searchText.lowercased()
         return hosts.filter { host in
             host.name.lowercased().contains(q)
-            || host.hostname.lowercased().contains(q)
-            || (manager.hostVolumes[host.name] ?? []).contains {
-                $0.remotePath.lowercased().contains(q) || $0.mountPoint.lowercased().contains(q)
-            }
+                || host.hostname.lowercased().contains(q)
+                || (manager.hostVolumes[host.name] ?? []).contains {
+                    $0.remotePath.lowercased().contains(q) || $0.mountPoint.lowercased().contains(q)
+                }
         }
     }
 
@@ -85,7 +93,9 @@ struct MenuBarView: View {
                     if manager.totalCount > 0 {
                         HStack(spacing: 4) {
                             Circle()
-                                .fill(manager.mountedCount > 0 ? Color.green : Color.gray.opacity(0.3))
+                                .fill(
+                                    manager.mountedCount > 0 ? Color.green : Color.gray.opacity(0.3)
+                                )
                                 .frame(width: 6, height: 6)
                             Text("\(manager.mountedCount) of \(manager.totalCount) active")
                                 .font(.system(size: 10))
@@ -109,7 +119,9 @@ struct MenuBarView: View {
                         .textFieldStyle(.plain)
                         .font(.system(size: 11))
                     if !searchText.isEmpty {
-                        Button { searchText = "" } label: {
+                        Button {
+                            searchText = ""
+                        } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.tertiary)
@@ -141,9 +153,10 @@ struct MenuBarView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
         } else {
-            ForEach(Array(allHosts.enumerated()), id: \.element.id) { hostIndex, host in
-                hostCard(host: host, volumes: filteredVolumes(for: host),
-                         hostIndex: hostIndex, hostTotal: allHosts.count)
+            ForEach(Array(allHosts.enumerated()), id: \.element.id) { idx, host in
+                hostCard(
+                    host: host, volumes: filteredVolumes(for: host),
+                    hostIndex: idx, hostTotal: allHosts.count)
             }
             if allHosts.count > 1 && searchText.isEmpty {
                 globalActions
@@ -170,16 +183,18 @@ struct MenuBarView: View {
 
     // MARK: - Host Card
 
-    private func hostCard(host: SSHHost, volumes: [MountedVolume],
-                          hostIndex: Int, hostTotal: Int) -> some View {
-        let mounted = volumes.filter { $0.isMounted }.count
+    private func hostCard(
+        host: SSHHost, volumes: [MountedVolume],
+        hostIndex: Int, hostTotal: Int
+    ) -> some View {
+        let mounted = volumes.filter(\.isMounted).count
         let hasUnmounted = volumes.contains { !$0.isMounted }
         let hostLoading = volumes.contains { manager.loadingVolumes.contains($0.id) }
-        let latency = manager.hostLatencies[host.name]
 
         return VStack(spacing: 0) {
             HostCardHeader(
-                host: host, manager: manager, latency: latency,
+                host: host, manager: manager,
+                latency: manager.hostLatencies[host.name],
                 mounted: mounted, volumeCount: volumes.count,
                 hasUnmounted: hasUnmounted, hostLoading: hostLoading,
                 hostIndex: hostIndex, hostTotal: hostTotal,
@@ -243,10 +258,10 @@ struct MenuBarView: View {
         VStack(spacing: 8) {
             Picker(selection: $manager.selectedHost) {
                 Text("Select host...").tag(nil as SSHHost?)
-                ForEach(manager.hosts) { host in
-                    Text(host.displayName).tag(host as SSHHost?)
-                }
-            } label: { EmptyView() }
+                ForEach(manager.hosts) { Text($0.displayName).tag($0 as SSHHost?) }
+            } label: {
+                EmptyView()
+            }
             .labelsHidden()
             .controlSize(.small)
 
@@ -270,10 +285,8 @@ struct MenuBarView: View {
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
-
                 Button(action: addVolume) {
-                    Text("Add")
-                        .frame(maxWidth: .infinity)
+                    Text("Add").frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
@@ -298,14 +311,6 @@ struct MenuBarView: View {
     }
 
     // MARK: - Global Actions
-
-    private var hasFavorites: Bool {
-        manager.hostVolumes.values.flatMap { $0 }.contains { $0.isFavorite }
-    }
-
-    private var hasUnmountedFavorites: Bool {
-        manager.hostVolumes.values.flatMap { $0 }.contains { $0.isFavorite && !$0.isMounted }
-    }
 
     private var globalActions: some View {
         GlassEffectContainer {
@@ -363,7 +368,9 @@ struct MenuBarView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(3)
                 Spacer(minLength: 0)
-                Button { withAnimation { manager.lastError = nil } } label: {
+                Button {
+                    withAnimation { manager.lastError = nil }
+                } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 8, weight: .bold))
                         .foregroundStyle(.tertiary)
@@ -373,10 +380,11 @@ struct MenuBarView: View {
             }
             .padding(8)
             .glassEffect(.clear.tint(.red), in: .rect(cornerRadius: 10))
-            .transition(.asymmetric(
-                insertion: .opacity.combined(with: .move(edge: .top)),
-                removal: .opacity
-            ))
+            .transition(
+                .asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .top)),
+                    removal: .opacity
+                ))
         }
     }
 
@@ -393,9 +401,7 @@ struct MenuBarView: View {
             .popover(isPresented: $showSettings, arrowEdge: .top) {
                 settingsPopover
             }
-
             Spacer()
-
             Button {
                 Task {
                     if hasAnyMounted { await manager.unmountEverything() }
@@ -420,14 +426,18 @@ struct MenuBarView: View {
                 GlassEffectContainer {
                     HStack(spacing: 4) {
                         ForEach(
-                            Array(zip([0, 1, 2], [
-                                ("circle.lefthalf.filled", "Auto"),
-                                ("sun.max.fill", "Light"),
-                                ("moon.fill", "Dark"),
-                            ])), id: \.0
+                            Array(
+                                zip(
+                                    [0, 1, 2],
+                                    [
+                                        ("circle.lefthalf.filled", "Auto"),
+                                        ("sun.max.fill", "Light"),
+                                        ("moon.fill", "Dark"),
+                                    ])), id: \.0
                         ) { mode, info in
-                            let selected = manager.appearanceMode == mode
-                            Button { manager.appearanceMode = mode } label: {
+                            Button {
+                                manager.appearanceMode = mode
+                            } label: {
                                 VStack(spacing: 4) {
                                     Image(systemName: info.0)
                                         .font(.system(size: 16, weight: .medium))
@@ -440,7 +450,9 @@ struct MenuBarView: View {
                                 .padding(.vertical, 8)
                             }
                             .buttonStyle(.glass)
-                            .tint(selected ? Color.accentColor : nil)
+                            .tint(manager.appearanceMode == mode ? Color.accentColor : nil)
+                            .controlSize(.small)
+                            .focusEffectDisabled()
                         }
                     }
                 }
@@ -483,6 +495,47 @@ struct MenuBarView: View {
     }
 }
 
+// MARK: - Reorder Controls
+
+private struct ReorderButtons: View {
+    let index: Int
+    let total: Int
+    let onMove: (IndexSet, Int) -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button {
+                guard index > 0 else { return }
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    onMove(IndexSet(integer: index), index - 1)
+                }
+            } label: {
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 7, weight: .bold))
+                    .frame(width: 14, height: 10)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(index > 0 ? Color.secondary : Color.gray.opacity(0.15))
+            .disabled(index == 0)
+
+            Button {
+                guard index < total - 1 else { return }
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    onMove(IndexSet(integer: index), index + 2)
+                }
+            } label: {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 7, weight: .bold))
+                    .frame(width: 14, height: 10)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(index < total - 1 ? Color.secondary : Color.gray.opacity(0.15))
+            .disabled(index >= total - 1)
+        }
+        .transition(.opacity)
+    }
+}
+
 // MARK: - Host Card Header
 
 struct HostCardHeader: View {
@@ -501,36 +554,9 @@ struct HostCardHeader: View {
     var body: some View {
         HStack(spacing: 6) {
             if isHovered && hostTotal > 1 {
-                VStack(spacing: 0) {
-                    Button {
-                        guard hostIndex > 0 else { return }
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            manager.moveHost(from: IndexSet(integer: hostIndex), to: hostIndex - 1)
-                        }
-                    } label: {
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 7, weight: .bold))
-                            .frame(width: 14, height: 10)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(hostIndex > 0 ? Color.secondary : Color.gray.opacity(0.15))
-                    .disabled(hostIndex == 0)
-
-                    Button {
-                        guard hostIndex < hostTotal - 1 else { return }
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            manager.moveHost(from: IndexSet(integer: hostIndex), to: hostIndex + 2)
-                        }
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 7, weight: .bold))
-                            .frame(width: 14, height: 10)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(hostIndex < hostTotal - 1 ? Color.secondary : Color.gray.opacity(0.15))
-                    .disabled(hostIndex >= hostTotal - 1)
+                ReorderButtons(index: hostIndex, total: hostTotal) { src, dst in
+                    manager.moveHost(from: src, to: dst)
                 }
-                .transition(.opacity)
             }
 
             Image(systemName: "server.rack")
@@ -539,6 +565,7 @@ struct HostCardHeader: View {
                 .foregroundStyle(mounted > 0 ? .green : (isHovered ? .blue : .secondary))
                 .frame(width: 22, height: 22)
                 .contentTransition(.symbolEffect(.replace))
+
             VStack(alignment: .leading, spacing: 1) {
                 Text(host.name)
                     .font(.system(size: 12, weight: .semibold))
@@ -549,10 +576,11 @@ struct HostCardHeader: View {
                         .lineLimit(1)
                 }
             }
-            if let ms = latency {
-                latencyBadge(ms: ms)
-            }
+
+            if let ms = latency { latencyBadge(ms: ms) }
+
             Spacer()
+
             if mounted > 0 {
                 Text("\(mounted)/\(volumeCount)")
                     .font(.system(size: 9, weight: .bold, design: .rounded))
@@ -561,19 +589,28 @@ struct HostCardHeader: View {
                     .padding(.vertical, 2)
                     .background(Capsule().fill(.green.opacity(0.1)))
             }
+
             HStack(spacing: 2) {
-                hostActionButton(icon: "antenna.radiowaves.left.and.right", color: .blue, disabled: false, tip: "Check latency") {
+                actionButton(
+                    icon: "antenna.radiowaves.left.and.right", color: .blue, disabled: false,
+                    tip: "Check latency"
+                ) {
                     await manager.checkLatency(hostName: host.name)
                 }
                 if mounted > 0 {
-                    hostActionButton(icon: "eject.fill", color: .orange, disabled: hostLoading, tip: "Unmount all") {
+                    actionButton(
+                        icon: "eject.fill", color: .orange, disabled: hostLoading,
+                        tip: "Unmount all"
+                    ) {
                         for vol in volumes where vol.isMounted {
                             await manager.unmountVolume(vol, hostName: host.name)
                         }
                     }
                 }
                 if hasUnmounted {
-                    hostActionButton(icon: "bolt.fill", color: .green, disabled: hostLoading, tip: "Mount all") {
+                    actionButton(
+                        icon: "bolt.fill", color: .green, disabled: hostLoading, tip: "Mount all"
+                    ) {
                         for vol in volumes where !vol.isMounted {
                             await manager.mountVolume(vol, hostName: host.name)
                         }
@@ -608,17 +645,23 @@ struct HostCardHeader: View {
         .glassEffect(.clear, in: .capsule)
     }
 
-    private func hostActionButton(
+    private func actionButton(
         icon: String, color: Color, disabled: Bool, tip: String,
         action: @escaping () async -> Void
     ) -> some View {
-        Button { Task { await action() } } label: {
+        Button {
+            Task { await action() }
+        } label: {
             Image(systemName: icon)
                 .font(.system(size: 9, weight: .semibold))
                 .frame(width: 20, height: 20)
         }
         .buttonStyle(.borderless)
-        .foregroundStyle(disabled ? Color.gray.opacity(0.15) : (isHovered ? color.opacity(0.8) : Color.gray.opacity(0.3)))
+        .foregroundStyle(
+            disabled
+                ? Color.gray.opacity(0.15)
+                : (isHovered ? color.opacity(0.8) : Color.gray.opacity(0.3))
+        )
         .disabled(disabled)
         .help(tip)
     }
@@ -638,43 +681,15 @@ struct VolumeRow: View {
     var body: some View {
         HStack(spacing: 8) {
             if isHovered && total > 1 {
-                VStack(spacing: 0) {
-                    Button {
-                        guard index > 0 else { return }
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            manager.moveVolume(hostName: hostName, from: IndexSet(integer: index), to: index - 1)
-                        }
-                    } label: {
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 7, weight: .bold))
-                            .frame(width: 14, height: 10)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(index > 0 ? Color.secondary : Color.gray.opacity(0.15))
-                    .disabled(index == 0)
-
-                    Button {
-                        guard index < total - 1 else { return }
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            manager.moveVolume(hostName: hostName, from: IndexSet(integer: index), to: index + 2)
-                        }
-                    } label: {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 7, weight: .bold))
-                            .frame(width: 14, height: 10)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(index < total - 1 ? Color.secondary : Color.gray.opacity(0.15))
-                    .disabled(index >= total - 1)
+                ReorderButtons(index: index, total: total) { src, dst in
+                    manager.moveVolume(hostName: hostName, from: src, to: dst)
                 }
-                .transition(.opacity)
             }
 
+            // Status indicator
             ZStack {
                 if volume.isMounted {
-                    Circle()
-                        .fill(Color.green.opacity(0.2))
-                        .frame(width: 14, height: 14)
+                    Circle().fill(Color.green.opacity(0.2)).frame(width: 14, height: 14)
                 }
                 Circle()
                     .fill(volume.isMounted ? Color.green : Color.gray.opacity(0.2))
@@ -689,6 +704,7 @@ struct VolumeRow: View {
                     .foregroundStyle(.yellow)
             }
 
+            // Path labels
             VStack(alignment: .leading, spacing: 1) {
                 Text(volume.mountPoint)
                     .font(.system(size: 11, design: .monospaced))
@@ -701,14 +717,11 @@ struct VolumeRow: View {
                     .truncationMode(.middle)
             }
             .contentShape(Rectangle())
-            .onTapGesture {
-                if volume.isMounted {
-                    manager.openInFinder(volume)
-                }
-            }
+            .onTapGesture { if volume.isMounted { manager.openInFinder(volume) } }
 
             Spacer(minLength: 2)
 
+            // Actions
             if manager.loadingVolumes.contains(volume.id) {
                 ProgressView()
                     .controlSize(.mini)
@@ -716,22 +729,32 @@ struct VolumeRow: View {
             } else {
                 HStack(spacing: 2) {
                     if isHovered {
-                        rowButton(icon: "doc.text", color: Color.gray.opacity(0.25), hoverColor: .blue, tip: "View log", fontSize: 9) {
-                            onShowLog()
-                        }
+                        rowButton(
+                            icon: "doc.text", color: Color.gray.opacity(0.25), hoverColor: .blue,
+                            tip: "View log", fontSize: 9
+                        ) { onShowLog() }
                     }
                     if volume.isMounted {
-                        rowButton(icon: "folder", color: Color.gray.opacity(0.25), hoverColor: .blue, tip: "Open in Finder", fontSize: 9) {
-                            manager.openInFinder(volume)
-                        }
-                        rowButton(icon: "eject.fill", color: .orange, hoverColor: .orange, tip: "Unmount") {
+                        rowButton(
+                            icon: "folder", color: Color.gray.opacity(0.25), hoverColor: .blue,
+                            tip: "Open in Finder", fontSize: 9
+                        ) { manager.openInFinder(volume) }
+                        rowButton(
+                            icon: "eject.fill", color: .orange, hoverColor: .orange, tip: "Unmount"
+                        ) {
                             await manager.unmountVolume(volume, hostName: hostName)
                         }
                     } else {
-                        rowButton(icon: "bolt.fill", color: Color.gray.opacity(0.25), hoverColor: .green, tip: "Mount") {
+                        rowButton(
+                            icon: "bolt.fill", color: Color.gray.opacity(0.25), hoverColor: .green,
+                            tip: "Mount"
+                        ) {
                             await manager.mountVolume(volume, hostName: hostName)
                         }
-                        rowButton(icon: "xmark", color: Color.gray.opacity(0.25), hoverColor: .red, tip: "Remove", fontSize: 8) {
+                        rowButton(
+                            icon: "xmark", color: Color.gray.opacity(0.25), hoverColor: .red,
+                            tip: "Remove", fontSize: 8
+                        ) {
                             await manager.removeVolume(volume, hostName: hostName)
                         }
                     }
@@ -746,34 +769,53 @@ struct VolumeRow: View {
         )
         .contentShape(Rectangle())
         .onHover { h in withAnimation(.easeInOut(duration: 0.12)) { isHovered = h } }
-        .contextMenu {
-            if volume.isMounted {
-                Button { manager.openInFinder(volume) } label: {
-                    Label("Open in Finder", systemImage: "folder")
-                }
-                Button { Task { await manager.unmountVolume(volume, hostName: hostName) } } label: {
-                    Label("Unmount", systemImage: "eject.fill")
-                }
-            } else {
-                Button { Task { await manager.mountVolume(volume, hostName: hostName) } } label: {
-                    Label("Mount", systemImage: "bolt.fill")
-                }
+        .contextMenu { volumeContextMenu }
+    }
+
+    @ViewBuilder
+    private var volumeContextMenu: some View {
+        if volume.isMounted {
+            Button {
+                manager.openInFinder(volume)
+            } label: {
+                Label("Open in Finder", systemImage: "folder")
             }
+            Button {
+                Task { await manager.unmountVolume(volume, hostName: hostName) }
+            } label: {
+                Label("Unmount", systemImage: "eject.fill")
+            }
+        } else {
+            Button {
+                Task { await manager.mountVolume(volume, hostName: hostName) }
+            } label: {
+                Label("Mount", systemImage: "bolt.fill")
+            }
+        }
+        Divider()
+        Button {
+            manager.copyMountPath(volume)
+        } label: {
+            Label("Copy Mount Path", systemImage: "doc.on.doc")
+        }
+        Button {
+            onShowLog()
+        } label: {
+            Label("View Log", systemImage: "doc.text")
+        }
+        Button {
+            manager.toggleFavorite(volume, hostName: hostName)
+        } label: {
+            Label(
+                volume.isFavorite ? "Unfavorite" : "Favorite",
+                systemImage: volume.isFavorite ? "star.slash" : "star.fill")
+        }
+        if !volume.isMounted {
             Divider()
-            Button { manager.copyMountPath(volume) } label: {
-                Label("Copy Mount Path", systemImage: "doc.on.doc")
-            }
-            Button { onShowLog() } label: {
-                Label("View Log", systemImage: "doc.text")
-            }
-            Button { manager.toggleFavorite(volume, hostName: hostName) } label: {
-                Label(volume.isFavorite ? "Unfavorite" : "Favorite", systemImage: volume.isFavorite ? "star.slash" : "star.fill")
-            }
-            if !volume.isMounted {
-                Divider()
-                Button(role: .destructive) { Task { await manager.removeVolume(volume, hostName: hostName) } } label: {
-                    Label("Remove", systemImage: "trash")
-                }
+            Button(role: .destructive) {
+                Task { await manager.removeVolume(volume, hostName: hostName) }
+            } label: {
+                Label("Remove", systemImage: "trash")
             }
         }
     }
@@ -783,7 +825,9 @@ struct VolumeRow: View {
         fontSize: CGFloat = 10,
         action: @escaping () async -> Void
     ) -> some View {
-        Button { Task { await action() } } label: {
+        Button {
+            Task { await action() }
+        } label: {
             Image(systemName: icon)
                 .font(.system(size: fontSize, weight: .medium))
                 .foregroundStyle(isHovered ? hoverColor : color)
@@ -793,7 +837,6 @@ struct VolumeRow: View {
         .buttonStyle(.plain)
         .help(tip)
     }
-
 }
 
 // MARK: - Log Viewer

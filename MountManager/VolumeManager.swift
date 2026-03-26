@@ -83,7 +83,8 @@ class VolumeManager: ObservableObject {
     }
 
     private func requestNotificationPermission() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in
+        }
     }
 
     private func sendNotification(title: String, body: String) {
@@ -98,33 +99,38 @@ class VolumeManager: ObservableObject {
 
     private static func findOxfs() -> String {
         // Check UserDefaults first
-        if let saved = UserDefaults.standard.string(forKey: oxfsPathKey), !saved.isEmpty {
+        if let saved = UserDefaults.standard.string(forKey: oxfsPathKey), !saved.isEmpty,
+            FileManager.default.isExecutableFile(atPath: saved)
+        {
             return saved
         }
-        // Search common locations
+        // Use login shell to resolve from user's full PATH
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-lc", "which oxfs"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
+        process.waitUntilExit()
+        let output =
+            String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !output.isEmpty && process.terminationStatus == 0 {
+            return output
+        }
+        // Fallback: check common locations
         let candidates = [
             "/opt/homebrew/bin/oxfs",
             "/usr/local/bin/oxfs",
             "\(NSHomeDirectory())/.local/bin/oxfs",
-            "/usr/bin/oxfs",
         ]
         for path in candidates {
             if FileManager.default.isExecutableFile(atPath: path) {
                 return path
             }
         }
-        // Fallback: try `which`
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
-        process.arguments = ["oxfs"]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        try? process.run()
-        process.waitUntilExit()
-        let output =
-            String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return output.isEmpty ? "/usr/local/bin/oxfs" : output
+        return "/usr/local/bin/oxfs"
     }
 
     // MARK: - Volume persistence
@@ -257,7 +263,11 @@ class VolumeManager: ObservableObject {
         if result.status != 0 {
             let msg = "Mount failed: \(result.error.isEmpty ? result.output : result.error)"
             lastError = msg
-            sendNotification(title: "Mount Failed", body: "\(volume.remotePath) on \(hostName): \(result.error.isEmpty ? result.output : result.error)")
+            sendNotification(
+                title: "Mount Failed",
+                body:
+                    "\(volume.remotePath) on \(hostName): \(result.error.isEmpty ? result.output : result.error)"
+            )
             await refreshStatus()
             loadingVolumes.remove(volume.id)
             return
@@ -363,7 +373,7 @@ class VolumeManager: ObservableObject {
 
     func toggleFavorite(_ volume: MountedVolume, hostName: String) {
         guard var vols = hostVolumes[hostName],
-              let idx = vols.firstIndex(where: { $0.id == volume.id })
+            let idx = vols.firstIndex(where: { $0.id == volume.id })
         else { return }
         vols[idx].isFavorite.toggle()
         hostVolumes[hostName] = vols
@@ -422,7 +432,8 @@ class VolumeManager: ObservableObject {
 
     /// Ensure hostOrder includes all active host names
     private func syncHostOrder() {
-        let activeNames = Set(hosts.filter { hostVolumes[$0.name]?.isEmpty == false }.map { $0.name })
+        let activeNames = Set(
+            hosts.filter { hostVolumes[$0.name]?.isEmpty == false }.map { $0.name })
         // Add any new hosts not yet in the order
         for name in activeNames where !hostOrder.contains(name) {
             hostOrder.append(name)
@@ -448,7 +459,7 @@ class VolumeManager: ObservableObject {
         guard let host = hostFor(name: hostName) else { return "Host not found." }
         let path = logPathFor(host: host, remotePath: volume.remotePath)
         guard let data = FileManager.default.contents(atPath: path),
-              let content = String(data: data, encoding: .utf8)
+            let content = String(data: data, encoding: .utf8)
         else { return "No log file found at \(path)." }
         // Return last 200 lines
         let lines = content.components(separatedBy: .newlines)
