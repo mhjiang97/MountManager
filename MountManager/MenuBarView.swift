@@ -47,7 +47,6 @@ struct MenuBarView: View {
     var body: some View {
         VStack(spacing: 0) {
             header
-            Divider().opacity(0.3)
             ScrollView(.vertical, showsIndicators: true) {
                 VStack(spacing: 10) {
                     hostSections
@@ -59,11 +58,13 @@ struct MenuBarView: View {
             Divider().opacity(0.3)
             footer
         }
-        .frame(width: 320)
-        .frame(maxHeight: 540)
+        .frame(width: 360)
+        .frame(maxHeight: 580)
         .animation(.spring(duration: 0.3, bounce: 0.15), value: manager.hostVolumes)
         .animation(.spring(duration: 0.3, bounce: 0.15), value: showAddForm)
-        .onChange(of: manager.appearanceMode) { _, mode in applyAppearance(mode) }
+        .onChange(of: manager.appearanceMode) { _, mode in
+            DispatchQueue.main.async { applyAppearance(mode) }
+        }
         .onAppear { applyAppearance(manager.appearanceMode) }
         .popover(item: $logVolume) { item in
             LogViewerPanel(
@@ -118,7 +119,7 @@ struct MenuBarView: View {
                 }
                 .padding(.horizontal, 7)
                 .padding(.vertical, 4)
-                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.primary.opacity(0.04)))
+                .glassEffect(.clear, in: .rect(cornerRadius: 6))
             }
         }
         .padding(.horizontal, 14)
@@ -154,7 +155,8 @@ struct MenuBarView: View {
         VStack(spacing: 10) {
             Image(systemName: "externaldrive.badge.plus")
                 .font(.system(size: 28, weight: .light))
-                .foregroundStyle(.quaternary)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.tertiary)
             Text("No volumes yet")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.tertiary)
@@ -271,11 +273,9 @@ struct MenuBarView: View {
 
                 Button(action: addVolume) {
                     Text("Add")
-                        .font(.system(size: 11, weight: .medium))
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 3)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .disabled(newRemotePath.isEmpty)
             }
@@ -288,16 +288,13 @@ struct MenuBarView: View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 9))
-                .foregroundStyle(iconColor.opacity(0.6))
+                .foregroundStyle(iconColor.opacity(0.7))
                 .frame(width: 14)
             content()
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
-        .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(.primary.opacity(0.04))
-        )
+        .glassEffect(.clear, in: .rect(cornerRadius: 6))
     }
 
     // MARK: - Global Actions
@@ -311,53 +308,41 @@ struct MenuBarView: View {
     }
 
     private var globalActions: some View {
-        GlassEffectContainer(spacing: 4) {
+        GlassEffectContainer {
             VStack(spacing: 4) {
                 if hasFavorites {
                     Button {
                         Task { await manager.mountFavorites() }
                     } label: {
-                        HStack(spacing: 3) {
-                            Image(systemName: "star.fill").font(.system(size: 8, weight: .bold))
-                            Text("Mount Favorites").font(.system(size: 10, weight: .medium))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                        Label("Mount Favorites", systemImage: "star.fill")
+                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(hasUnmountedFavorites && !manager.isLoading ? .yellow : Color.gray.opacity(0.3))
-                    .glassEffect(.clear, in: .rect(cornerRadius: 8))
+                    .buttonStyle(.glass)
+                    .tint(.yellow)
+                    .controlSize(.small)
                     .disabled(!hasUnmountedFavorites || manager.isLoading)
                 }
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     Button {
                         Task { await manager.mountEverything() }
                     } label: {
-                        HStack(spacing: 3) {
-                            Image(systemName: "bolt.fill").font(.system(size: 8, weight: .bold))
-                            Text("Mount All").font(.system(size: 10, weight: .medium))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                        Label("Mount All", systemImage: "bolt.fill")
+                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(hasAnyUnmounted && !manager.isLoading ? .green : Color.gray.opacity(0.3))
-                    .glassEffect(.clear, in: .rect(cornerRadius: 8))
+                    .buttonStyle(.glass)
+                    .tint(.green)
+                    .controlSize(.small)
                     .disabled(!hasAnyUnmounted || manager.isLoading)
 
                     Button {
                         Task { await manager.unmountEverything() }
                     } label: {
-                        HStack(spacing: 3) {
-                            Image(systemName: "eject.fill").font(.system(size: 8, weight: .bold))
-                            Text("Unmount All").font(.system(size: 10, weight: .medium))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                        Label("Unmount All", systemImage: "eject.fill")
+                            .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(hasAnyMounted && !manager.isLoading ? .orange : Color.gray.opacity(0.3))
-                    .glassEffect(.clear, in: .rect(cornerRadius: 8))
+                    .buttonStyle(.glass)
+                    .tint(.orange)
+                    .controlSize(.small)
                     .disabled(!hasAnyMounted || manager.isLoading)
                 }
             }
@@ -403,12 +388,8 @@ struct MenuBarView: View {
                 withAnimation { showSettings.toggle() }
             } label: {
                 Image(systemName: "gear")
-                    .font(.system(size: 12))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 28)
-                    .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.glass)
             .popover(isPresented: $showSettings, arrowEdge: .top) {
                 settingsPopover
             }
@@ -421,18 +402,9 @@ struct MenuBarView: View {
                     NSApp.terminate(nil)
                 }
             } label: {
-                HStack(spacing: 3) {
-                    Image(systemName: "power")
-                        .font(.system(size: 9, weight: .semibold))
-                    Text("Quit")
-                        .font(.system(size: 11))
-                }
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
+                Text("Quit")
             }
-            .buttonStyle(.plain)
-            .glassEffect(.clear, in: .capsule)
+            .buttonStyle(.glass)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -445,36 +417,31 @@ struct MenuBarView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Appearance")
                     .font(.system(size: 12, weight: .semibold))
-                HStack(spacing: 4) {
-                    ForEach(
-                        Array(zip([0, 1, 2], [
-                            ("circle.lefthalf.filled", "Auto"),
-                            ("sun.max.fill", "Light"),
-                            ("moon.fill", "Dark"),
-                        ])), id: \.0
-                    ) { mode, info in
-                        let selected = manager.appearanceMode == mode
-                        Button { manager.appearanceMode = mode } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: info.0)
-                                    .font(.system(size: 16, weight: .medium))
-                                    .frame(height: 20)
-                                Text(info.1)
-                                    .font(.system(size: 9, weight: .medium))
+                GlassEffectContainer {
+                    HStack(spacing: 4) {
+                        ForEach(
+                            Array(zip([0, 1, 2], [
+                                ("circle.lefthalf.filled", "Auto"),
+                                ("sun.max.fill", "Light"),
+                                ("moon.fill", "Dark"),
+                            ])), id: \.0
+                        ) { mode, info in
+                            let selected = manager.appearanceMode == mode
+                            Button { manager.appearanceMode = mode } label: {
+                                VStack(spacing: 4) {
+                                    Image(systemName: info.0)
+                                        .font(.system(size: 16, weight: .medium))
+                                        .symbolRenderingMode(.hierarchical)
+                                        .frame(height: 20)
+                                    Text(info.1)
+                                        .font(.system(size: 9, weight: .medium))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 8)
+                            .buttonStyle(.glass)
+                            .tint(selected ? Color.accentColor : nil)
                         }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(selected ? Color.accentColor : .secondary)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .fill(selected ? Color.accentColor.opacity(0.12) : Color.clear)
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                                .strokeBorder(selected ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
-                        )
                     }
                 }
             }
@@ -493,7 +460,7 @@ struct MenuBarView: View {
             }
         }
         .padding(16)
-        .frame(width: 260)
+        .frame(width: 280)
     }
 
     // MARK: - Helpers
@@ -567,11 +534,21 @@ struct HostCardHeader: View {
             }
 
             Image(systemName: "server.rack")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(isHovered ? .blue : .secondary)
-                .frame(width: 20, height: 20)
-            Text(host.name)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.system(size: 11, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(mounted > 0 ? .green : (isHovered ? .blue : .secondary))
+                .frame(width: 22, height: 22)
+                .contentTransition(.symbolEffect(.replace))
+            VStack(alignment: .leading, spacing: 1) {
+                Text(host.name)
+                    .font(.system(size: 12, weight: .semibold))
+                if host.hostname != host.name {
+                    Text(host.hostname)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
             if let ms = latency {
                 latencyBadge(ms: ms)
             }
@@ -626,9 +603,9 @@ struct HostCardHeader: View {
                 }
             }
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 1)
-        .background(Capsule().fill(.primary.opacity(0.04)))
+        .padding(.horizontal, 5)
+        .padding(.vertical, 2)
+        .glassEffect(.clear, in: .capsule)
     }
 
     private func hostActionButton(
@@ -660,7 +637,6 @@ struct VolumeRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // Reorder arrows (visible on hover, only when >1 volume)
             if isHovered && total > 1 {
                 VStack(spacing: 0) {
                     Button {
@@ -818,22 +794,6 @@ struct VolumeRow: View {
         .help(tip)
     }
 
-    // Sync overload for non-async actions
-    private func rowButton(
-        icon: String, color: Color, hoverColor: Color, tip: String,
-        fontSize: CGFloat = 10,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button { action() } label: {
-            Image(systemName: icon)
-                .font(.system(size: fontSize, weight: .medium))
-                .foregroundStyle(isHovered ? hoverColor : color)
-                .frame(width: 22, height: 22)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(tip)
-    }
 }
 
 // MARK: - Log Viewer
