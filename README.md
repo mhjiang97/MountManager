@@ -75,4 +75,4 @@ Default template: `/Volumes/{host}/{path}`
 
 ## License
 
-MIT
+[MIT](LICENSE)
