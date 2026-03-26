@@ -32,7 +32,11 @@ struct SSHConfigParser {
 
         for line in content.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            if trimmed.isEmpty || trimmed.hasPrefix("#") || trimmed.lowercased().hasPrefix("include") { continue }
+            if trimmed.isEmpty || trimmed.hasPrefix("#")
+                || trimmed.lowercased().hasPrefix("include")
+            {
+                continue
+            }
 
             let parts = trimmed.split(separator: " ", maxSplits: 1).map(String.init)
             guard parts.count == 2 else { continue }
@@ -42,7 +46,10 @@ struct SSHConfigParser {
 
             if key == "host" {
                 if let name = currentName, let hostname = currentHostname, let user = currentUser {
-                    hosts.append(SSHHost(id: name, name: name, hostname: hostname, user: user, port: currentPort, identityFile: currentIdentityFile))
+                    hosts.append(
+                        SSHHost(
+                            id: name, name: name, hostname: hostname, user: user, port: currentPort,
+                            identityFile: currentIdentityFile))
                 }
                 if value.contains("*") {
                     currentName = nil
@@ -65,7 +72,10 @@ struct SSHConfigParser {
         }
 
         if let name = currentName, let hostname = currentHostname, let user = currentUser {
-            hosts.append(SSHHost(id: name, name: name, hostname: hostname, user: user, port: currentPort, identityFile: currentIdentityFile))
+            hosts.append(
+                SSHHost(
+                    id: name, name: name, hostname: hostname, user: user, port: currentPort,
+                    identityFile: currentIdentityFile))
         }
 
         return hosts

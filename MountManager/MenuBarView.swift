@@ -1,131 +1,509 @@
 import SwiftUI
 
+// MARK: - Main View
+
 struct MenuBarView: View {
     @ObservedObject var manager: VolumeManager
     @State private var newRemotePath: String = ""
     @State private var newMountPoint: String = ""
-    @State private var showQuitAlert = false
     @State private var showSettings = false
+    @State private var showAddForm = false
+    @State private var logVolume: LogViewerIdentifiable?
+    @State private var searchText: String = ""
 
-    /// Hosts that have at least one volume configured
-    private var hostsWithVolumes: [SSHHost] {
-        manager.hosts.filter { manager.hostVolumes[$0.name]?.isEmpty == false }
+    private var hasAnyUnmounted: Bool {
+        manager.hostVolumes.values.flatMap { $0 }.contains { !$0.isMounted }
+    }
+
+    private var hasAnyMounted: Bool {
+        manager.hostVolumes.values.flatMap { $0 }.contains { $0.isMounted }
+    }
+
+    private var filteredHosts: [SSHHost] {
+        let hosts = manager.orderedHostsWithVolumes
+        guard !searchText.isEmpty else { return hosts }
+        let q = searchText.lowercased()
+        return hosts.filter { host in
+            host.name.lowercased().contains(q)
+            || host.hostname.lowercased().contains(q)
+            || (manager.hostVolumes[host.name] ?? []).contains {
+                $0.remotePath.lowercased().contains(q) || $0.mountPoint.lowercased().contains(q)
+            }
+        }
+    }
+
+    private func filteredVolumes(for host: SSHHost) -> [MountedVolume] {
+        let vols = manager.hostVolumes[host.name] ?? []
+        guard !searchText.isEmpty else { return vols }
+        let q = searchText.lowercased()
+        if host.name.lowercased().contains(q) || host.hostname.lowercased().contains(q) {
+            return vols
+        }
+        return vols.filter {
+            $0.remotePath.lowercased().contains(q) || $0.mountPoint.lowercased().contains(q)
+        }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("MountManager")
-                .font(.headline)
-                .padding(.bottom, 4)
-
-            // Show all hosts that have volumes, grouped by host
-            ForEach(hostsWithVolumes) { host in
-                let vols = manager.hostVolumes[host.name] ?? []
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(host.displayName)
-                        .font(.subheadline)
-                        .foregroundColor(.primary)
-                    ForEach(vols) { volume in
-                        VolumeRow(volume: volume, hostName: host.name, manager: manager)
-                    }
+        VStack(spacing: 0) {
+            header
+            Divider().opacity(0.3)
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(spacing: 10) {
+                    hostSections
+                    addVolumeSection
+                    errorBanner
                 }
-                Divider()
+                .padding(12)
             }
+            Divider().opacity(0.3)
+            footer
+        }
+        .frame(width: 320)
+        .frame(maxHeight: 540)
+        .animation(.spring(duration: 0.3, bounce: 0.15), value: manager.hostVolumes)
+        .animation(.spring(duration: 0.3, bounce: 0.15), value: showAddForm)
+        .onChange(of: manager.appearanceMode) { _, mode in applyAppearance(mode) }
+        .onAppear { applyAppearance(manager.appearanceMode) }
+        .popover(item: $logVolume) { item in
+            LogViewerPanel(
+                title: "\(item.hostName): \(item.volume.remotePath)",
+                content: manager.logContent(for: item.volume, hostName: item.hostName)
+            )
+        }
+    }
 
-            // Host picker for adding new volumes
-            HStack {
-                Text("Add to:")
-                    .foregroundColor(.secondary)
-                Picker("", selection: $manager.selectedHost) {
-                    Text("Select a host...").tag(nil as SSHHost?)
-                    ForEach(manager.hosts) { host in
-                        Text(host.displayName).tag(host as SSHHost?)
-                    }
-                }
-                .labelsHidden()
-            }
+    // MARK: - Header
 
-            if manager.selectedHost != nil {
-                SecureField("Password (optional)", text: $manager.password)
-                    .textFieldStyle(.roundedBorder)
-
-                VStack(spacing: 4) {
-                    TextField("Remote path, e.g. /storage5", text: $newRemotePath)
-                        .textFieldStyle(.roundedBorder)
-                        .onChange(of: newRemotePath) { _, newValue in
-                            newMountPoint = manager.defaultMountPoint(remotePath: newValue)
+    private var header: some View {
+        VStack(spacing: 6) {
+            HStack(spacing: 0) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("MountManager")
+                        .font(.system(size: 13, weight: .semibold))
+                    if manager.totalCount > 0 {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(manager.mountedCount > 0 ? Color.green : Color.gray.opacity(0.3))
+                                .frame(width: 6, height: 6)
+                            Text("\(manager.mountedCount) of \(manager.totalCount) active")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
                         }
-                    HStack {
-                        TextField("Mount point", text: $newMountPoint)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.caption)
-                        Button(action: addVolume) {
-                            Image(systemName: "plus.circle.fill")
+                    }
+                }
+                Spacer()
+                if manager.isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
+            if manager.totalCount > 3 {
+                HStack(spacing: 5) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                    TextField("Filter...", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 11))
+                    if !searchText.isEmpty {
+                        Button { searchText = "" } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.tertiary)
                         }
-                        .disabled(newRemotePath.isEmpty)
-                        .buttonStyle(.borderless)
+                        .buttonStyle(.plain)
                     }
                 }
-
-            }
-
-            if !hostsWithVolumes.isEmpty {
-                Divider()
-                HStack {
-                    Button("Mount All") { Task { await manager.mountEverything() } }
-                    Spacer()
-                    Button("Unmount All") { Task { await manager.unmountEverything() } }
-                }
-            }
-
-            if let error = manager.lastError {
-                Divider()
-                Text(error)
-                    .foregroundColor(.red)
-                    .font(.caption)
-                    .lineLimit(3)
-            }
-
-            Divider()
-            DisclosureGroup("Settings", isExpanded: $showSettings) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Mount point template:")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    TextField("/Volumes/{host}/{path}", text: $manager.mountTemplate)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(.caption, design: .monospaced))
-                    Text("Placeholders: {host} {user} {hostname} {path}")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.top, 4)
-            }
-
-            Divider()
-            Button("Quit") {
-                let hasMounted = manager.hostVolumes.values.flatMap({ $0 }).contains { $0.isMounted }
-                if hasMounted {
-                    showQuitAlert = true
-                } else {
-                    NSApplication.shared.terminate(nil)
-                }
-            }
-            .alert("Unmount all volumes before quitting?", isPresented: $showQuitAlert) {
-                Button("Unmount & Quit") {
-                    Task {
-                        await manager.unmountEverything()
-                        NSApplication.shared.terminate(nil)
-                    }
-                }
-                Button("Quit") {
-                    NSApplication.shared.terminate(nil)
-                }
-                Button("Cancel", role: .cancel) {}
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
+                .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(.primary.opacity(0.04)))
             }
         }
-        .padding(12)
-        .frame(width: 340)
+        .padding(.horizontal, 14)
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+    }
+
+    // MARK: - Host Sections
+
+    @ViewBuilder
+    private var hostSections: some View {
+        let allHosts = filteredHosts
+        if allHosts.isEmpty && !showAddForm && searchText.isEmpty {
+            emptyState
+        } else if allHosts.isEmpty && !searchText.isEmpty {
+            Text("No matches")
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+        } else {
+            ForEach(Array(allHosts.enumerated()), id: \.element.id) { hostIndex, host in
+                hostCard(host: host, volumes: filteredVolumes(for: host),
+                         hostIndex: hostIndex, hostTotal: allHosts.count)
+            }
+            if allHosts.count > 1 && searchText.isEmpty {
+                globalActions
+            }
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "externaldrive.badge.plus")
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(.quaternary)
+            Text("No volumes yet")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.tertiary)
+            Text("Add a remote path to get started")
+                .font(.system(size: 10))
+                .foregroundStyle(.quaternary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+    }
+
+    // MARK: - Host Card
+
+    private func hostCard(host: SSHHost, volumes: [MountedVolume],
+                          hostIndex: Int, hostTotal: Int) -> some View {
+        let mounted = volumes.filter { $0.isMounted }.count
+        let hasUnmounted = volumes.contains { !$0.isMounted }
+        let hostLoading = volumes.contains { manager.loadingVolumes.contains($0.id) }
+        let latency = manager.hostLatencies[host.name]
+
+        return VStack(spacing: 0) {
+            HostCardHeader(
+                host: host, manager: manager, latency: latency,
+                mounted: mounted, volumeCount: volumes.count,
+                hasUnmounted: hasUnmounted, hostLoading: hostLoading,
+                hostIndex: hostIndex, hostTotal: hostTotal,
+                volumes: volumes
+            )
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+
+            ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
+                if index > 0 { Divider().padding(.leading, 36).opacity(0.5) }
+                VolumeRow(
+                    volume: volume, hostName: host.name, manager: manager,
+                    index: index, total: volumes.count,
+                    onShowLog: { logVolume = LogViewerIdentifiable(volume, host.name) }
+                )
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
+            }
+            .padding(.bottom, 2)
+        }
+        .glassEffect(.clear, in: .rect(cornerRadius: 12))
+    }
+
+    // MARK: - Add Volume
+
+    private var addVolumeSection: some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.spring(duration: 0.25)) { showAddForm.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.green)
+                        .frame(width: 20, height: 20)
+                    Text("Add Volume")
+                        .font(.system(size: 12, weight: .semibold))
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(showAddForm ? 90 : 0))
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if showAddForm {
+                Divider().padding(.horizontal, 8).opacity(0.5)
+                addFormContent
+                    .padding(10)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+            }
+        }
+        .glassEffect(.clear, in: .rect(cornerRadius: 12))
+    }
+
+    private var addFormContent: some View {
+        VStack(spacing: 8) {
+            Picker(selection: $manager.selectedHost) {
+                Text("Select host...").tag(nil as SSHHost?)
+                ForEach(manager.hosts) { host in
+                    Text(host.displayName).tag(host as SSHHost?)
+                }
+            } label: { EmptyView() }
+            .labelsHidden()
+            .controlSize(.small)
+
+            if manager.selectedHost != nil {
+                formField(icon: "lock.fill", iconColor: .orange) {
+                    SecureField("Password (optional)", text: $manager.password)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12))
+                }
+                formField(icon: "folder.fill", iconColor: .blue) {
+                    TextField("Remote path, e.g. /data", text: $newRemotePath)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12))
+                        .onChange(of: newRemotePath) { _, v in
+                            newMountPoint = manager.defaultMountPoint(remotePath: v)
+                        }
+                }
+                formField(icon: "arrow.triangle.branch", iconColor: .purple) {
+                    TextField("Mount point", text: $newMountPoint)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+
+                Button(action: addVolume) {
+                    Text("Add")
+                        .font(.system(size: 11, weight: .medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 3)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(newRemotePath.isEmpty)
+            }
+        }
+    }
+
+    private func formField<C: View>(
+        icon: String, iconColor: Color, @ViewBuilder content: () -> C
+    ) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 9))
+                .foregroundStyle(iconColor.opacity(0.6))
+                .frame(width: 14)
+            content()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(.primary.opacity(0.04))
+        )
+    }
+
+    // MARK: - Global Actions
+
+    private var hasFavorites: Bool {
+        manager.hostVolumes.values.flatMap { $0 }.contains { $0.isFavorite }
+    }
+
+    private var hasUnmountedFavorites: Bool {
+        manager.hostVolumes.values.flatMap { $0 }.contains { $0.isFavorite && !$0.isMounted }
+    }
+
+    private var globalActions: some View {
+        GlassEffectContainer(spacing: 4) {
+            VStack(spacing: 4) {
+                if hasFavorites {
+                    Button {
+                        Task { await manager.mountFavorites() }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "star.fill").font(.system(size: 8, weight: .bold))
+                            Text("Mount Favorites").font(.system(size: 10, weight: .medium))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(hasUnmountedFavorites && !manager.isLoading ? .yellow : Color.gray.opacity(0.3))
+                    .glassEffect(.clear, in: .rect(cornerRadius: 8))
+                    .disabled(!hasUnmountedFavorites || manager.isLoading)
+                }
+                HStack(spacing: 6) {
+                    Button {
+                        Task { await manager.mountEverything() }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "bolt.fill").font(.system(size: 8, weight: .bold))
+                            Text("Mount All").font(.system(size: 10, weight: .medium))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(hasAnyUnmounted && !manager.isLoading ? .green : Color.gray.opacity(0.3))
+                    .glassEffect(.clear, in: .rect(cornerRadius: 8))
+                    .disabled(!hasAnyUnmounted || manager.isLoading)
+
+                    Button {
+                        Task { await manager.unmountEverything() }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "eject.fill").font(.system(size: 8, weight: .bold))
+                            Text("Unmount All").font(.system(size: 10, weight: .medium))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(hasAnyMounted && !manager.isLoading ? .orange : Color.gray.opacity(0.3))
+                    .glassEffect(.clear, in: .rect(cornerRadius: 8))
+                    .disabled(!hasAnyMounted || manager.isLoading)
+                }
+            }
+        }
+    }
+
+    // MARK: - Error Banner
+
+    @ViewBuilder
+    private var errorBanner: some View {
+        if let error = manager.lastError {
+            HStack(alignment: .top, spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.red)
+                Text(error)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                Spacer(minLength: 0)
+                Button { withAnimation { manager.lastError = nil } } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundStyle(.tertiary)
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.borderless)
+            }
+            .padding(8)
+            .glassEffect(.clear.tint(.red), in: .rect(cornerRadius: 10))
+            .transition(.asymmetric(
+                insertion: .opacity.combined(with: .move(edge: .top)),
+                removal: .opacity
+            ))
+        }
+    }
+
+    // MARK: - Footer
+
+    private var footer: some View {
+        HStack(spacing: 0) {
+            Button {
+                withAnimation { showSettings.toggle() }
+            } label: {
+                Image(systemName: "gear")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $showSettings, arrowEdge: .top) {
+                settingsPopover
+            }
+
+            Spacer()
+
+            Button {
+                Task {
+                    if hasAnyMounted { await manager.unmountEverything() }
+                    NSApp.terminate(nil)
+                }
+            } label: {
+                HStack(spacing: 3) {
+                    Image(systemName: "power")
+                        .font(.system(size: 9, weight: .semibold))
+                    Text("Quit")
+                        .font(.system(size: 11))
+                }
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+            }
+            .buttonStyle(.plain)
+            .glassEffect(.clear, in: .capsule)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    // MARK: - Settings Popover
+
+    private var settingsPopover: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Appearance")
+                    .font(.system(size: 12, weight: .semibold))
+                HStack(spacing: 4) {
+                    ForEach(
+                        Array(zip([0, 1, 2], [
+                            ("circle.lefthalf.filled", "Auto"),
+                            ("sun.max.fill", "Light"),
+                            ("moon.fill", "Dark"),
+                        ])), id: \.0
+                    ) { mode, info in
+                        let selected = manager.appearanceMode == mode
+                        Button { manager.appearanceMode = mode } label: {
+                            VStack(spacing: 4) {
+                                Image(systemName: info.0)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .frame(height: 20)
+                                Text(info.1)
+                                    .font(.system(size: 9, weight: .medium))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(selected ? Color.accentColor : .secondary)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .fill(selected ? Color.accentColor.opacity(0.12) : Color.clear)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                                .strokeBorder(selected ? Color.accentColor.opacity(0.3) : Color.clear, lineWidth: 1)
+                        )
+                    }
+                }
+            }
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Mount Template")
+                    .font(.system(size: 12, weight: .semibold))
+                TextField("/Volumes/{host}/{path}", text: $manager.mountTemplate)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 11, design: .monospaced))
+                Text("{host}  {user}  {hostname}  {path}")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .padding(16)
+        .frame(width: 260)
+    }
+
+    // MARK: - Helpers
+
+    private func applyAppearance(_ mode: Int) {
+        switch mode {
+        case 1: NSApp.appearance = NSAppearance(named: .aqua)
+        case 2: NSApp.appearance = NSAppearance(named: .darkAqua)
+        default: NSApp.appearance = nil
+        }
     }
 
     private func addVolume() {
@@ -134,47 +512,367 @@ struct MenuBarView: View {
         let mount = newMountPoint
         newRemotePath = ""
         newMountPoint = ""
-        Task {
-            await manager.addVolume(remotePath: path, mountPoint: mount)
-        }
+        Task { await manager.addVolume(remotePath: path, mountPoint: mount) }
     }
 }
+
+// MARK: - Host Card Header
+
+struct HostCardHeader: View {
+    let host: SSHHost
+    @ObservedObject var manager: VolumeManager
+    let latency: Double?
+    let mounted: Int
+    let volumeCount: Int
+    let hasUnmounted: Bool
+    let hostLoading: Bool
+    let hostIndex: Int
+    let hostTotal: Int
+    let volumes: [MountedVolume]
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            if isHovered && hostTotal > 1 {
+                VStack(spacing: 0) {
+                    Button {
+                        guard hostIndex > 0 else { return }
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            manager.moveHost(from: IndexSet(integer: hostIndex), to: hostIndex - 1)
+                        }
+                    } label: {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 7, weight: .bold))
+                            .frame(width: 14, height: 10)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(hostIndex > 0 ? Color.secondary : Color.gray.opacity(0.15))
+                    .disabled(hostIndex == 0)
+
+                    Button {
+                        guard hostIndex < hostTotal - 1 else { return }
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            manager.moveHost(from: IndexSet(integer: hostIndex), to: hostIndex + 2)
+                        }
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 7, weight: .bold))
+                            .frame(width: 14, height: 10)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(hostIndex < hostTotal - 1 ? Color.secondary : Color.gray.opacity(0.15))
+                    .disabled(hostIndex >= hostTotal - 1)
+                }
+                .transition(.opacity)
+            }
+
+            Image(systemName: "server.rack")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(isHovered ? .blue : .secondary)
+                .frame(width: 20, height: 20)
+            Text(host.name)
+                .font(.system(size: 12, weight: .semibold))
+            if let ms = latency {
+                latencyBadge(ms: ms)
+            }
+            Spacer()
+            if mounted > 0 {
+                Text("\(mounted)/\(volumeCount)")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundStyle(.green)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(.green.opacity(0.1)))
+            }
+            HStack(spacing: 2) {
+                hostActionButton(icon: "antenna.radiowaves.left.and.right", color: .blue, disabled: false, tip: "Check latency") {
+                    await manager.checkLatency(hostName: host.name)
+                }
+                if mounted > 0 {
+                    hostActionButton(icon: "eject.fill", color: .orange, disabled: hostLoading, tip: "Unmount all") {
+                        for vol in volumes where vol.isMounted {
+                            await manager.unmountVolume(vol, hostName: host.name)
+                        }
+                    }
+                }
+                if hasUnmounted {
+                    hostActionButton(icon: "bolt.fill", color: .green, disabled: hostLoading, tip: "Mount all") {
+                        for vol in volumes where !vol.isMounted {
+                            await manager.mountVolume(vol, hostName: host.name)
+                        }
+                    }
+                }
+            }
+        }
+        .contentShape(Rectangle())
+        .onHover { h in withAnimation(.easeInOut(duration: 0.12)) { isHovered = h } }
+    }
+
+    private func latencyBadge(ms: Double) -> some View {
+        Group {
+            if ms < 0 {
+                HStack(spacing: 2) {
+                    Circle().fill(Color.red).frame(width: 5, height: 5)
+                    Text("offline")
+                        .font(.system(size: 8, weight: .medium))
+                        .foregroundStyle(.red)
+                }
+            } else {
+                HStack(spacing: 2) {
+                    Circle().fill(ms < 200 ? Color.green : Color.yellow).frame(width: 5, height: 5)
+                    Text("\(Int(ms))ms")
+                        .font(.system(size: 8, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 1)
+        .background(Capsule().fill(.primary.opacity(0.04)))
+    }
+
+    private func hostActionButton(
+        icon: String, color: Color, disabled: Bool, tip: String,
+        action: @escaping () async -> Void
+    ) -> some View {
+        Button { Task { await action() } } label: {
+            Image(systemName: icon)
+                .font(.system(size: 9, weight: .semibold))
+                .frame(width: 20, height: 20)
+        }
+        .buttonStyle(.borderless)
+        .foregroundStyle(disabled ? Color.gray.opacity(0.15) : (isHovered ? color.opacity(0.8) : Color.gray.opacity(0.3)))
+        .disabled(disabled)
+        .help(tip)
+    }
+}
+
+// MARK: - Volume Row
 
 struct VolumeRow: View {
     let volume: MountedVolume
     let hostName: String
     @ObservedObject var manager: VolumeManager
+    var index: Int = 0
+    var total: Int = 1
+    var onShowLog: () -> Void = {}
+    @State private var isHovered = false
 
     var body: some View {
-        HStack {
-            Circle()
-                .fill(volume.isMounted ? Color.green : Color.red)
-                .frame(width: 8, height: 8)
+        HStack(spacing: 8) {
+            // Reorder arrows (visible on hover, only when >1 volume)
+            if isHovered && total > 1 {
+                VStack(spacing: 0) {
+                    Button {
+                        guard index > 0 else { return }
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            manager.moveVolume(hostName: hostName, from: IndexSet(integer: index), to: index - 1)
+                        }
+                    } label: {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 7, weight: .bold))
+                            .frame(width: 14, height: 10)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(index > 0 ? Color.secondary : Color.gray.opacity(0.15))
+                    .disabled(index == 0)
+
+                    Button {
+                        guard index < total - 1 else { return }
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            manager.moveVolume(hostName: hostName, from: IndexSet(integer: index), to: index + 2)
+                        }
+                    } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 7, weight: .bold))
+                            .frame(width: 14, height: 10)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(index < total - 1 ? Color.secondary : Color.gray.opacity(0.15))
+                    .disabled(index >= total - 1)
+                }
+                .transition(.opacity)
+            }
+
+            ZStack {
+                if volume.isMounted {
+                    Circle()
+                        .fill(Color.green.opacity(0.2))
+                        .frame(width: 14, height: 14)
+                }
+                Circle()
+                    .fill(volume.isMounted ? Color.green : Color.gray.opacity(0.2))
+                    .frame(width: 7, height: 7)
+            }
+            .frame(width: 16)
+            .animation(.easeInOut(duration: 0.25), value: volume.isMounted)
+
+            if volume.isFavorite {
+                Image(systemName: "star.fill")
+                    .font(.system(size: 7))
+                    .foregroundStyle(.yellow)
+            }
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(volume.remotePath)
-                    .font(.system(.body, design: .monospaced))
                 Text(volume.mountPoint)
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 11, design: .monospaced))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(volume.remotePath)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if volume.isMounted {
+                    manager.openInFinder(volume)
+                }
             }
 
-            Spacer()
+            Spacer(minLength: 2)
 
-            if volume.isMounted {
-                Button("Unmount") { Task { await manager.unmountVolume(volume, hostName: hostName) } }
-                    .controlSize(.small)
+            if manager.loadingVolumes.contains(volume.id) {
+                ProgressView()
+                    .controlSize(.mini)
+                    .transition(.scale.combined(with: .opacity))
             } else {
-                Button("Mount") { Task { await manager.mountVolume(volume, hostName: hostName) } }
-                    .controlSize(.small)
+                HStack(spacing: 2) {
+                    if isHovered {
+                        rowButton(icon: "doc.text", color: Color.gray.opacity(0.25), hoverColor: .blue, tip: "View log", fontSize: 9) {
+                            onShowLog()
+                        }
+                    }
+                    if volume.isMounted {
+                        rowButton(icon: "folder", color: Color.gray.opacity(0.25), hoverColor: .blue, tip: "Open in Finder", fontSize: 9) {
+                            manager.openInFinder(volume)
+                        }
+                        rowButton(icon: "eject.fill", color: .orange, hoverColor: .orange, tip: "Unmount") {
+                            await manager.unmountVolume(volume, hostName: hostName)
+                        }
+                    } else {
+                        rowButton(icon: "bolt.fill", color: Color.gray.opacity(0.25), hoverColor: .green, tip: "Mount") {
+                            await manager.mountVolume(volume, hostName: hostName)
+                        }
+                        rowButton(icon: "xmark", color: Color.gray.opacity(0.25), hoverColor: .red, tip: "Remove", fontSize: 8) {
+                            await manager.removeVolume(volume, hostName: hostName)
+                        }
+                    }
+                }
             }
-
-            Button(action: { Task { await manager.removeVolume(volume, hostName: hostName) } }) {
-                Image(systemName: "trash")
-                    .foregroundColor(.secondary)
-            }
-            .buttonStyle(.borderless)
-            .controlSize(.small)
         }
+        .padding(.vertical, 2)
+        .padding(.horizontal, 2)
+        .background(
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(isHovered ? Color.primary.opacity(0.04) : Color.clear)
+        )
+        .contentShape(Rectangle())
+        .onHover { h in withAnimation(.easeInOut(duration: 0.12)) { isHovered = h } }
+        .contextMenu {
+            if volume.isMounted {
+                Button { manager.openInFinder(volume) } label: {
+                    Label("Open in Finder", systemImage: "folder")
+                }
+                Button { Task { await manager.unmountVolume(volume, hostName: hostName) } } label: {
+                    Label("Unmount", systemImage: "eject.fill")
+                }
+            } else {
+                Button { Task { await manager.mountVolume(volume, hostName: hostName) } } label: {
+                    Label("Mount", systemImage: "bolt.fill")
+                }
+            }
+            Divider()
+            Button { manager.copyMountPath(volume) } label: {
+                Label("Copy Mount Path", systemImage: "doc.on.doc")
+            }
+            Button { onShowLog() } label: {
+                Label("View Log", systemImage: "doc.text")
+            }
+            Button { manager.toggleFavorite(volume, hostName: hostName) } label: {
+                Label(volume.isFavorite ? "Unfavorite" : "Favorite", systemImage: volume.isFavorite ? "star.slash" : "star.fill")
+            }
+            if !volume.isMounted {
+                Divider()
+                Button(role: .destructive) { Task { await manager.removeVolume(volume, hostName: hostName) } } label: {
+                    Label("Remove", systemImage: "trash")
+                }
+            }
+        }
+    }
+
+    private func rowButton(
+        icon: String, color: Color, hoverColor: Color, tip: String,
+        fontSize: CGFloat = 10,
+        action: @escaping () async -> Void
+    ) -> some View {
+        Button { Task { await action() } } label: {
+            Image(systemName: icon)
+                .font(.system(size: fontSize, weight: .medium))
+                .foregroundStyle(isHovered ? hoverColor : color)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(tip)
+    }
+
+    // Sync overload for non-async actions
+    private func rowButton(
+        icon: String, color: Color, hoverColor: Color, tip: String,
+        fontSize: CGFloat = 10,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button { action() } label: {
+            Image(systemName: icon)
+                .font(.system(size: fontSize, weight: .medium))
+                .foregroundStyle(isHovered ? hoverColor : color)
+                .frame(width: 22, height: 22)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(tip)
+    }
+}
+
+// MARK: - Log Viewer
+
+struct LogViewerIdentifiable: Identifiable {
+    let id = UUID()
+    let volume: MountedVolume
+    let hostName: String
+    init(_ volume: MountedVolume, _ hostName: String) {
+        self.volume = volume
+        self.hostName = hostName
+    }
+}
+
+struct LogViewerPanel: View {
+    let title: String
+    let content: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "doc.text")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.blue)
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Divider()
+            ScrollView(.vertical, showsIndicators: true) {
+                Text(content)
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(12)
+        .frame(width: 400, height: 300)
     }
 }

@@ -8,10 +8,26 @@ struct MountManagerApp: App {
         MenuBarExtra {
             MenuBarView(manager: manager)
         } label: {
-            Image(systemName: manager.hostVolumes.values.flatMap({ $0 }).contains(where: { $0.isMounted })
-                  ? "externaldrive.fill.badge.checkmark"
-                  : "externaldrive")
+            HStack(spacing: 2) {
+                Image(systemName: menuBarIconName)
+                    .symbolEffect(.pulse, isActive: manager.isLoading)
+                if manager.mountedCount > 0 {
+                    Text("\(manager.mountedCount)")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                }
+            }
         }
         .menuBarExtraStyle(.window)
+    }
+
+    private var menuBarIconName: String {
+        if manager.isLoading {
+            return "externaldrive.badge.timemachine"
+        } else if manager.mountedCount > 0 {
+            return "externaldrive.fill.badge.checkmark"
+        } else {
+            return "externaldrive"
+        }
     }
 }
