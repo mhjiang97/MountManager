@@ -10,6 +10,12 @@ struct MenuBarView: View {
     @State private var showAddForm = false
     @State private var logVolume: LogViewerIdentifiable?
     @State private var searchText = ""
+    @State private var addHovered = false
+    @State private var settingsHovered = false
+    @State private var quitHovered = false
+    @State private var favHovered = false
+    @State private var mountAllHovered = false
+    @State private var unmountAllHovered = false
 
     private var hasAnyUnmounted: Bool {
         manager.hostVolumes.values.flatMap { $0 }.contains { !$0.isMounted }
@@ -257,6 +263,7 @@ struct MenuBarView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .onHover { h in withAnimation(.easeInOut(duration: 0.12)) { addHovered = h } }
 
             if showAddForm {
                 Divider().padding(.horizontal, 8).opacity(0.5)
@@ -265,7 +272,10 @@ struct MenuBarView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
         }
-        .glassEffect(.clear, in: .rect(cornerRadius: 12))
+        .glassEffect(
+            addHovered ? .clear.tint(.green.opacity(0.15)) : .clear,
+            in: .rect(cornerRadius: 12)
+        )
     }
 
     private var addFormContent: some View {
@@ -342,9 +352,10 @@ struct MenuBarView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.glass)
-                    .tint(.yellow)
+                    .tint(favHovered ? .yellow : nil)
                     .controlSize(.small)
                     .disabled(!hasUnmountedFavorites || manager.isLoading)
+                    .onHover { favHovered = $0 }
                 }
                 HStack(spacing: 4) {
                     Button {
@@ -353,10 +364,11 @@ struct MenuBarView: View {
                         Label("Mount All", systemImage: "bolt.fill")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.glassProminent)
-                    .tint(.green)
+                    .buttonStyle(.glass)
+                    .tint(mountAllHovered ? .green : nil)
                     .controlSize(.small)
                     .disabled(!hasAnyUnmounted || manager.isLoading)
+                    .onHover { mountAllHovered = $0 }
 
                     Button {
                         Task { await manager.unmountEverything() }
@@ -365,9 +377,10 @@ struct MenuBarView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.glass)
-                    .tint(.orange)
+                    .tint(unmountAllHovered ? .orange : nil)
                     .controlSize(.small)
                     .disabled(!hasAnyMounted || manager.isLoading)
+                    .onHover { unmountAllHovered = $0 }
                 }
             }
         }
@@ -420,7 +433,9 @@ struct MenuBarView: View {
                     Label("Settings", systemImage: "gear")
                 }
                 .buttonStyle(.glass)
+                .tint(settingsHovered ? .gray : nil)
                 .controlSize(.small)
+                .onHover { settingsHovered = $0 }
                 .popover(isPresented: $showSettings, arrowEdge: .top) {
                     settingsPopover
                 }
@@ -434,7 +449,9 @@ struct MenuBarView: View {
                     Label("Quit", systemImage: "power")
                 }
                 .buttonStyle(.glass)
+                .tint(quitHovered ? .gray : nil)
                 .controlSize(.small)
+                .onHover { quitHovered = $0 }
             }
         }
         .padding(.horizontal, 12)
@@ -752,6 +769,7 @@ struct VolumeRow: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(volume.mountPoint)
                         .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(isHovered && volume.isMounted ? .blue : .primary)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     Text(volume.remotePath)
