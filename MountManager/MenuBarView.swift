@@ -16,6 +16,11 @@ struct MenuBarView: View {
     @State private var favHovered = false
     @State private var mountAllHovered = false
     @State private var unmountAllHovered = false
+    @State private var filterHovered = false
+    @State private var templateHovered = false
+    @State private var appearanceHovered: Int?
+    @State private var addButtonHovered = false
+    @State private var pickerHovered = false
 
     private var hasAnyUnmounted: Bool {
         manager.hostVolumes.values.flatMap { $0 }.contains { !$0.isMounted }
@@ -140,7 +145,11 @@ struct MenuBarView: View {
                 }
                 .padding(.horizontal, 7)
                 .padding(.vertical, 4)
-                .glassEffect(.clear, in: .rect(cornerRadius: 6))
+                .glassEffect(
+                    filterHovered ? .clear.tint(.accentColor.opacity(0.1)) : .clear,
+                    in: .rect(cornerRadius: 6)
+                )
+                .onHover { filterHovered = $0 }
             }
         }
         .padding(.horizontal, 14)
@@ -263,6 +272,10 @@ struct MenuBarView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .glassEffect(
+                addHovered ? .clear.tint(.accentColor.opacity(0.1)) : .clear,
+                in: .rect(cornerRadius: 8)
+            )
             .onHover { h in withAnimation(.easeInOut(duration: 0.12)) { addHovered = h } }
 
             if showAddForm {
@@ -272,78 +285,78 @@ struct MenuBarView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
         }
-        .glassEffect(
-            addHovered ? .clear.tint(.green.opacity(0.15)) : .clear,
-            in: .rect(cornerRadius: 12)
-        )
+        .glassEffect(.clear, in: .rect(cornerRadius: 12))
     }
 
     private var addFormContent: some View {
         GlassEffectContainer {
-        VStack(spacing: 8) {
-            Picker(selection: $manager.selectedHost) {
-                Text("Select host...").tag(nil as SSHHost?)
-                ForEach(manager.hosts) { Text($0.displayName).tag($0 as SSHHost?) }
-            } label: {
-                EmptyView()
-            }
-            .labelsHidden()
-            .controlSize(.small)
-            .glassEffect(.clear, in: .rect(cornerRadius: 6))
-
-            if manager.selectedHost != nil {
-                formField(icon: "lock.fill", iconColor: .orange) {
-                    SecureField("Password (optional)", text: $manager.password)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12))
+            VStack(spacing: 8) {
+                Picker(selection: $manager.selectedHost) {
+                    Text("Select host...").tag(nil as SSHHost?)
+                    ForEach(manager.hosts) { Text($0.displayName).tag($0 as SSHHost?) }
+                } label: {
+                    EmptyView()
                 }
-                formField(icon: "folder.fill", iconColor: .blue) {
-                    TextField("Remote path, e.g. /data", text: $newRemotePath)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12))
-                        .onChange(of: newRemotePath) { _, v in
-                            newMountPoint = manager.defaultMountPoint(remotePath: v)
-                        }
-                }
-                formField(icon: "arrow.triangle.branch", iconColor: .purple) {
-                    TextField("Mount point", text: $newMountPoint)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
-                Button(action: addVolume) {
-                    Label("Add", systemImage: "plus.circle.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.glassProminent)
-                .tint(.green)
+                .labelsHidden()
                 .controlSize(.small)
-                .disabled(newRemotePath.isEmpty)
+                .glassEffect(
+                    pickerHovered ? .clear.tint(.accentColor.opacity(0.1)) : .clear,
+                    in: .rect(cornerRadius: 6)
+                )
+                .onHover { pickerHovered = $0 }
+
+                if manager.selectedHost != nil {
+                    formField(icon: "lock.fill", iconColor: .orange) {
+                        SecureField("Password (optional)", text: $manager.password)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 12))
+                    }
+                    formField(icon: "folder.fill", iconColor: .blue) {
+                        TextField("Remote path, e.g. /data", text: $newRemotePath)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 12))
+                            .onChange(of: newRemotePath) { _, v in
+                                newMountPoint = manager.defaultMountPoint(remotePath: v)
+                            }
+                    }
+                    formField(icon: "arrow.triangle.branch", iconColor: .purple) {
+                        TextField("Mount point", text: $newMountPoint)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    Button(action: addVolume) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus.circle.fill")
+                                .rotationEffect(
+                                    .degrees(addButtonHovered && !newRemotePath.isEmpty ? 90 : 0)
+                                )
+                                .animation(.easeInOut(duration: 0.25), value: addButtonHovered)
+                            Text("Add")
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.glassProminent)
+                    .tint(.green)
+                    .controlSize(.small)
+                    .disabled(newRemotePath.isEmpty)
+                    .onHover { addButtonHovered = $0 }
+                }
             }
-        }
         }
     }
 
     private func formField<C: View>(
         icon: String, iconColor: Color, @ViewBuilder content: () -> C
     ) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon)
-                .font(.system(size: 9))
-                .foregroundStyle(iconColor)
-                .frame(width: 14)
-            content()
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .glassEffect(.clear, in: .rect(cornerRadius: 6))
+        GlassFormField(icon: icon, iconColor: iconColor, content: content)
     }
 
     // MARK: - Global Actions
 
     private var globalActions: some View {
         GlassEffectContainer {
-            VStack(spacing: 4) {
+            VStack(spacing: 5) {
                 if hasFavorites {
                     Button {
                         Task { await manager.mountFavorites() }
@@ -433,7 +446,7 @@ struct MenuBarView: View {
                     Label("Settings", systemImage: "gear")
                 }
                 .buttonStyle(.glass)
-                .tint(settingsHovered ? .gray : nil)
+                .tint(settingsHovered ? .accentColor : nil)
                 .controlSize(.small)
                 .onHover { settingsHovered = $0 }
                 .popover(isPresented: $showSettings, arrowEdge: .top) {
@@ -449,7 +462,7 @@ struct MenuBarView: View {
                     Label("Quit", systemImage: "power")
                 }
                 .buttonStyle(.glass)
-                .tint(quitHovered ? .gray : nil)
+                .tint(quitHovered ? .accentColor : nil)
                 .controlSize(.small)
                 .onHover { quitHovered = $0 }
             }
@@ -492,9 +505,15 @@ struct MenuBarView: View {
                                 .padding(.vertical, 8)
                             }
                             .buttonStyle(.glass)
-                            .tint(manager.appearanceMode == mode ? Color.accentColor : nil)
+                            .tint(
+                                manager.appearanceMode == mode
+                                    ? Color.accentColor
+                                    : (appearanceHovered == mode
+                                        ? Color.accentColor.opacity(0.4) : nil)
+                            )
                             .controlSize(.small)
                             .focusEffectDisabled()
+                            .onHover { h in appearanceHovered = h ? mode : nil }
                         }
                     }
                 }
@@ -510,10 +529,27 @@ struct MenuBarView: View {
                     .font(.system(size: 11, design: .monospaced))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
-                    .glassEffect(.clear, in: .rect(cornerRadius: 6))
-                Text("{host}  {user}  {hostname}  {path}")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
+                    .glassEffect(
+                        templateHovered ? .clear.tint(.accentColor.opacity(0.1)) : .clear,
+                        in: .rect(cornerRadius: 6)
+                    )
+                    .onHover { templateHovered = $0 }
+                GlassEffectContainer {
+                    HStack(spacing: 4) {
+                        TemplatePlaceholderButton(label: "{host}", color: .blue) {
+                            manager.mountTemplate.append("{host}")
+                        }
+                        TemplatePlaceholderButton(label: "{user}", color: .orange) {
+                            manager.mountTemplate.append("{user}")
+                        }
+                        TemplatePlaceholderButton(label: "{hostname}", color: .purple) {
+                            manager.mountTemplate.append("{hostname}")
+                        }
+                        TemplatePlaceholderButton(label: "{path}", color: .green) {
+                            manager.mountTemplate.append("{path}")
+                        }
+                    }
+                }
             }
         }
         .padding(16)
@@ -581,7 +617,52 @@ private struct ReorderButtons: View {
     }
 }
 
+// MARK: - Glass Form Field
+
+private struct GlassFormField<C: View>: View {
+    let icon: String
+    let iconColor: Color
+    @ViewBuilder let content: C
+    @State private var hovered = false
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.system(size: 9))
+                .foregroundStyle(iconColor)
+                .frame(width: 14)
+            content
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .glassEffect(
+            hovered ? .clear.tint(.accentColor.opacity(0.1)) : .clear,
+            in: .rect(cornerRadius: 6)
+        )
+        .onHover { hovered = $0 }
+    }
+}
+
 // MARK: - Mini Glass Button
+
+private struct TemplatePlaceholderButton: View {
+    let label: String
+    let color: Color
+    let action: () -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(label)
+                .font(.system(size: 9, weight: .medium, design: .monospaced))
+                .foregroundStyle(color)
+        }
+        .buttonStyle(.glass)
+        .tint(hovered ? color : nil)
+        .controlSize(.mini)
+        .onHover { hovered = $0 }
+    }
+}
 
 private struct MiniGlassButton: View {
     let icon: String
@@ -637,7 +718,9 @@ struct HostCardHeader: View {
                 Image(systemName: "server.rack")
                     .font(.system(size: 12, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(mounted > 0 ? Color.green : (isHovered ? Color.blue : Color.gray))
+                    .foregroundStyle(
+                        mounted > 0 ? Color.green : (isHovered ? Color.blue : Color.gray)
+                    )
                     .frame(width: 28, height: 28)
                     .glassEffect(.clear, in: .circle)
                     .contentTransition(.symbolEffect(.replace))
@@ -685,7 +768,8 @@ struct HostCardHeader: View {
                     }
                     if hasUnmounted {
                         MiniGlassButton(
-                            icon: "bolt.fill", color: .green, disabled: hostLoading, tip: "Mount all"
+                            icon: "bolt.fill", color: .green, disabled: hostLoading,
+                            tip: "Mount all"
                         ) {
                             for vol in volumes where !vol.isMounted {
                                 await manager.mountVolume(vol, hostName: host.name)

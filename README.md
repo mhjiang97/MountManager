@@ -17,8 +17,6 @@ A macOS menu bar app for managing [oxfs](https://github.com/oxfs/oxfs) SSHFS mou
 - **Right-click context menu** — mount, unmount, open, copy path, view log, favorite
 - **Reorder** — rearrange hosts and volumes with up/down arrows on hover
 - **Menu bar badge** — mounted volume count shown next to the icon
-- **Animated icon** — menu bar icon pulses while mounting is in progress
-- **Appearance** — auto, light, or dark mode
 - Configurable mount point template (`{host}`, `{user}`, `{hostname}`, `{path}`)
 - Password stored in Keychain, volume config in UserDefaults
 
@@ -39,16 +37,15 @@ brew install --cask mount-manager
 ```bash
 git clone https://github.com/mhjiang97/MountManager.git
 cd MountManager
-APP=build/MountManager.app
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp MountManager/Info.plist "$APP/Contents/"
-swiftc -o "$APP/Contents/MacOS/MountManager" \
-  -sdk $(xcrun --show-sdk-path) \
-  -framework SwiftUI \
-  -framework Security \
-  -framework AppKit \
-  -framework UserNotifications \
-  MountManager/*.swift
+open MountManager.xcodeproj
+```
+
+Then press **⌘B** to build or **⌘R** to build and run in Xcode.
+
+Alternatively, build from the command line:
+
+```bash
+xcodebuild -project MountManager.xcodeproj -scheme MountManager -configuration Release build
 ```
 
 ## Usage

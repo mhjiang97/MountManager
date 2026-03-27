@@ -14,10 +14,14 @@ struct MountedVolume: Identifiable, Hashable {
 @MainActor
 class VolumeManager: ObservableObject {
     @Published var hosts: [SSHHost] = []
+    private var isLoadingPassword = false
+
     @Published var selectedHost: SSHHost? {
         didSet {
             if let host = selectedHost {
+                isLoadingPassword = true
                 password = Self.loadPassword(for: host.name) ?? ""
+                isLoadingPassword = false
             } else {
                 password = ""
             }
@@ -28,7 +32,7 @@ class VolumeManager: ObservableObject {
 
     @Published var password: String = "" {
         didSet {
-            if let host = selectedHost {
+            if !isLoadingPassword, let host = selectedHost {
                 Self.savePassword(password, for: host.name)
             }
         }
@@ -223,7 +227,9 @@ class VolumeManager: ObservableObject {
 
     func mountVolume(_ volume: MountedVolume, hostName: String) async {
         guard let host = hostFor(name: hostName) else { return }
-        let pw = Self.loadPassword(for: hostName) ?? ""
+        let pw =
+            (selectedHost?.name == hostName ? password : nil) ?? Self.loadPassword(for: hostName)
+            ?? ""
         loadingVolumes.insert(volume.id)
         lastError = nil
 
@@ -480,16 +486,20 @@ class VolumeManager: ObservableObject {
     private static let keychainService = "com.mountmanager.ssh"
 
     private static func savePassword(_ password: String, for hostName: String) {
-        let data = Data(password.utf8)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
             kSecAttrAccount as String: hostName,
         ]
-        SecItemDelete(query as CFDictionary)
-        if !password.isEmpty {
+        if password.isEmpty {
+            SecItemDelete(query as CFDictionary)
+            return
+        }
+        let attrs: [String: Any] = [kSecValueData as String: Data(password.utf8)]
+        let status = SecItemUpdate(query as CFDictionary, attrs as CFDictionary)
+        if status == errSecItemNotFound {
             var addQuery = query
-            addQuery[kSecValueData as String] = data
+            addQuery[kSecValueData as String] = Data(password.utf8)
             SecItemAdd(addQuery as CFDictionary, nil)
         }
     }
