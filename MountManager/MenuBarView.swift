@@ -89,7 +89,7 @@ struct MenuBarView: View {
             HStack(spacing: 0) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("MountManager")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.system(size: 14, weight: .bold))
                     if manager.totalCount > 0 {
                         HStack(spacing: 4) {
                             Circle()
@@ -131,7 +131,7 @@ struct MenuBarView: View {
                 }
                 .padding(.horizontal, 7)
                 .padding(.vertical, 4)
-                .glassEffect(.clear, in: .rect(cornerRadius: 6))
+                .glassEffect(.regular, in: .rect(cornerRadius: 6))
             }
         }
         .padding(.horizontal, 14)
@@ -147,11 +147,16 @@ struct MenuBarView: View {
         if allHosts.isEmpty && !showAddForm && searchText.isEmpty {
             emptyState
         } else if allHosts.isEmpty && !searchText.isEmpty {
-            Text("No matches")
-                .font(.system(size: 11))
-                .foregroundStyle(.tertiary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
+            VStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 20, weight: .light))
+                    .foregroundStyle(.tertiary)
+                Text("No matches")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.tertiary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
         } else {
             ForEach(Array(allHosts.enumerated()), id: \.element.id) { idx, host in
                 hostCard(
@@ -165,20 +170,21 @@ struct MenuBarView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 12) {
             Image(systemName: "externaldrive.badge.plus")
-                .font(.system(size: 28, weight: .light))
+                .font(.system(size: 32, weight: .light))
                 .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
             Text("No volumes yet")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.tertiary)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
             Text("Add a remote path to get started")
-                .font(.system(size: 10))
-                .foregroundStyle(.quaternary)
+                .font(.system(size: 11))
+                .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 28)
+        .padding(.vertical, 32)
+        .glassEffect(.regular, in: .rect(cornerRadius: 12))
     }
 
     // MARK: - Host Card
@@ -190,6 +196,7 @@ struct MenuBarView: View {
         let mounted = volumes.filter(\.isMounted).count
         let hasUnmounted = volumes.contains { !$0.isMounted }
         let hostLoading = volumes.contains { manager.loadingVolumes.contains($0.id) }
+        let allMounted = mounted == volumes.count && mounted > 0
 
         return VStack(spacing: 0) {
             HostCardHeader(
@@ -215,7 +222,10 @@ struct MenuBarView: View {
             }
             .padding(.bottom, 2)
         }
-        .glassEffect(.clear, in: .rect(cornerRadius: 12))
+        .glassEffect(
+            allMounted ? .regular.tint(.green.opacity(0.15)) : .regular,
+            in: .rect(cornerRadius: 12)
+        )
     }
 
     // MARK: - Add Volume
@@ -251,7 +261,7 @@ struct MenuBarView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
         }
-        .glassEffect(.clear, in: .rect(cornerRadius: 12))
+        .glassEffect(.regular, in: .rect(cornerRadius: 12))
     }
 
     private var addFormContent: some View {
@@ -334,7 +344,7 @@ struct MenuBarView: View {
                         Label("Mount All", systemImage: "bolt.fill")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.glass)
+                    .buttonStyle(.glassProminent)
                     .tint(.green)
                     .controlSize(.small)
                     .disabled(!hasAnyUnmounted || manager.isLoading)
@@ -379,7 +389,7 @@ struct MenuBarView: View {
                 .buttonStyle(.borderless)
             }
             .padding(8)
-            .glassEffect(.clear.tint(.red), in: .rect(cornerRadius: 10))
+            .glassEffect(.regular.tint(.red.opacity(0.3)), in: .rect(cornerRadius: 10))
             .transition(
                 .asymmetric(
                     insertion: .opacity.combined(with: .move(edge: .top)),
@@ -587,7 +597,7 @@ struct HostCardHeader: View {
                     .foregroundStyle(.green)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
-                    .background(Capsule().fill(.green.opacity(0.1)))
+                    .glassEffect(.clear.tint(.green), in: .capsule)
             }
 
             HStack(spacing: 2) {
@@ -686,7 +696,6 @@ struct VolumeRow: View {
                 }
             }
 
-            // Status indicator
             ZStack {
                 if volume.isMounted {
                     Circle().fill(Color.green.opacity(0.2)).frame(width: 14, height: 14)
@@ -704,7 +713,6 @@ struct VolumeRow: View {
                     .foregroundStyle(.yellow)
             }
 
-            // Path labels
             VStack(alignment: .leading, spacing: 1) {
                 Text(volume.mountPoint)
                     .font(.system(size: 11, design: .monospaced))
@@ -721,7 +729,6 @@ struct VolumeRow: View {
 
             Spacer(minLength: 2)
 
-            // Actions
             if manager.loadingVolumes.contains(volume.id) {
                 ProgressView()
                     .controlSize(.mini)

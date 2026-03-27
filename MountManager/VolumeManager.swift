@@ -69,9 +69,9 @@ class VolumeManager: ObservableObject {
     }
 
     init() {
+        appearanceMode = UserDefaults.standard.integer(forKey: Self.appearanceKey)
         mountTemplate =
             UserDefaults.standard.string(forKey: Self.templateKey) ?? Self.defaultTemplate
-        appearanceMode = UserDefaults.standard.integer(forKey: Self.appearanceKey)
         oxfsPath = Self.findOxfs()
         hosts = SSHConfigParser.parse()
         loadSavedVolumes()
