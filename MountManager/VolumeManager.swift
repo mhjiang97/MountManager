@@ -117,6 +117,7 @@ class VolumeManager: ObservableObject {
             String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !output.isEmpty && process.terminationStatus == 0 {
+            UserDefaults.standard.set(output, forKey: oxfsPathKey)
             return output
         }
         // Fallback: check common locations
@@ -127,6 +128,7 @@ class VolumeManager: ObservableObject {
         ]
         for path in candidates {
             if FileManager.default.isExecutableFile(atPath: path) {
+                UserDefaults.standard.set(path, forKey: oxfsPathKey)
                 return path
             }
         }

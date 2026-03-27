@@ -93,10 +93,13 @@ struct MenuBarView: View {
                     if manager.totalCount > 0 {
                         HStack(spacing: 4) {
                             Circle()
-                                .fill(
-                                    manager.mountedCount > 0 ? Color.green : Color.gray.opacity(0.3)
+                                .fill(.clear)
+                                .frame(width: 7, height: 7)
+                                .glassEffect(
+                                    manager.mountedCount > 0
+                                        ? .clear.tint(.green) : .clear,
+                                    in: .circle
                                 )
-                                .frame(width: 6, height: 6)
                             Text("\(manager.mountedCount) of \(manager.totalCount) active")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
@@ -123,15 +126,15 @@ struct MenuBarView: View {
                             searchText = ""
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.tertiary)
+                                .font(.system(size: 9))
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.glass)
+                        .controlSize(.mini)
                     }
                 }
                 .padding(.horizontal, 7)
                 .padding(.vertical, 4)
-                .glassEffect(.regular, in: .rect(cornerRadius: 6))
+                .glassEffect(.clear, in: .rect(cornerRadius: 6))
             }
         }
         .padding(.horizontal, 14)
@@ -157,6 +160,7 @@ struct MenuBarView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
+            .glassEffect(.clear, in: .rect(cornerRadius: 12))
         } else {
             ForEach(Array(allHosts.enumerated()), id: \.element.id) { idx, host in
                 hostCard(
@@ -184,7 +188,7 @@ struct MenuBarView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 32)
-        .glassEffect(.regular, in: .rect(cornerRadius: 12))
+        .glassEffect(.clear, in: .rect(cornerRadius: 12))
     }
 
     // MARK: - Host Card
@@ -223,7 +227,7 @@ struct MenuBarView: View {
             .padding(.bottom, 2)
         }
         .glassEffect(
-            allMounted ? .regular.tint(.green.opacity(0.15)) : .regular,
+            allMounted ? .clear.tint(.green.opacity(0.15)) : .clear,
             in: .rect(cornerRadius: 12)
         )
     }
@@ -236,10 +240,10 @@ struct MenuBarView: View {
                 withAnimation(.spring(duration: 0.25)) { showAddForm.toggle() }
             } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 10, weight: .bold))
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 12))
+                        .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(.green)
-                        .frame(width: 20, height: 20)
                     Text("Add Volume")
                         .font(.system(size: 12, weight: .semibold))
                     Spacer()
@@ -261,10 +265,11 @@ struct MenuBarView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: 12))
+        .glassEffect(.clear, in: .rect(cornerRadius: 12))
     }
 
     private var addFormContent: some View {
+        GlassEffectContainer {
         VStack(spacing: 8) {
             Picker(selection: $manager.selectedHost) {
                 Text("Select host...").tag(nil as SSHHost?)
@@ -274,6 +279,7 @@ struct MenuBarView: View {
             }
             .labelsHidden()
             .controlSize(.small)
+            .glassEffect(.clear, in: .rect(cornerRadius: 6))
 
             if manager.selectedHost != nil {
                 formField(icon: "lock.fill", iconColor: .orange) {
@@ -296,12 +302,15 @@ struct MenuBarView: View {
                         .foregroundStyle(.secondary)
                 }
                 Button(action: addVolume) {
-                    Text("Add").frame(maxWidth: .infinity)
+                    Label("Add", systemImage: "plus.circle.fill")
+                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
+                .tint(.green)
                 .controlSize(.small)
                 .disabled(newRemotePath.isEmpty)
             }
+        }
         }
     }
 
@@ -311,7 +320,7 @@ struct MenuBarView: View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.system(size: 9))
-                .foregroundStyle(iconColor.opacity(0.7))
+                .foregroundStyle(iconColor)
                 .frame(width: 14)
             content()
         }
@@ -369,27 +378,29 @@ struct MenuBarView: View {
     @ViewBuilder
     private var errorBanner: some View {
         if let error = manager.lastError {
-            HStack(alignment: .top, spacing: 6) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.red)
-                Text(error)
-                    .font(.system(size: 10))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(3)
-                Spacer(minLength: 0)
-                Button {
-                    withAnimation { manager.lastError = nil }
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundStyle(.tertiary)
-                        .frame(width: 16, height: 16)
+            GlassEffectContainer {
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.red)
+                    Text(error)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                    Spacer(minLength: 0)
+                    Button {
+                        withAnimation { manager.lastError = nil }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 7, weight: .bold))
+                            .frame(width: 16, height: 16)
+                    }
+                    .buttonStyle(.glass)
+                    .controlSize(.mini)
                 }
-                .buttonStyle(.borderless)
+                .padding(8)
+                .glassEffect(.clear.tint(.red.opacity(0.3)), in: .rect(cornerRadius: 10))
             }
-            .padding(8)
-            .glassEffect(.regular.tint(.red.opacity(0.3)), in: .rect(cornerRadius: 10))
             .transition(
                 .asymmetric(
                     insertion: .opacity.combined(with: .move(edge: .top)),
@@ -401,26 +412,30 @@ struct MenuBarView: View {
     // MARK: - Footer
 
     private var footer: some View {
-        HStack(spacing: 0) {
-            Button {
-                withAnimation { showSettings.toggle() }
-            } label: {
-                Image(systemName: "gear")
-            }
-            .buttonStyle(.glass)
-            .popover(isPresented: $showSettings, arrowEdge: .top) {
-                settingsPopover
-            }
-            Spacer()
-            Button {
-                Task {
-                    if hasAnyMounted { await manager.unmountEverything() }
-                    NSApp.terminate(nil)
+        GlassEffectContainer {
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation { showSettings.toggle() }
+                } label: {
+                    Label("Settings", systemImage: "gear")
                 }
-            } label: {
-                Text("Quit")
+                .buttonStyle(.glass)
+                .controlSize(.small)
+                .popover(isPresented: $showSettings, arrowEdge: .top) {
+                    settingsPopover
+                }
+                Spacer()
+                Button {
+                    Task {
+                        if hasAnyMounted { await manager.unmountEverything() }
+                        NSApp.terminate(nil)
+                    }
+                } label: {
+                    Label("Quit", systemImage: "power")
+                }
+                .buttonStyle(.glass)
+                .controlSize(.small)
             }
-            .buttonStyle(.glass)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -474,8 +489,11 @@ struct MenuBarView: View {
                 Text("Mount Template")
                     .font(.system(size: 12, weight: .semibold))
                 TextField("/Volumes/{host}/{path}", text: $manager.mountTemplate)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
                     .font(.system(size: 11, design: .monospaced))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .glassEffect(.clear, in: .rect(cornerRadius: 6))
                 Text("{host}  {user}  {hostname}  {path}")
                     .font(.system(size: 9))
                     .foregroundStyle(.tertiary)
@@ -513,7 +531,7 @@ private struct ReorderButtons: View {
     let onMove: (IndexSet, Int) -> Void
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 1) {
             Button {
                 guard index > 0 else { return }
                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -521,11 +539,11 @@ private struct ReorderButtons: View {
                 }
             } label: {
                 Image(systemName: "chevron.up")
-                    .font(.system(size: 7, weight: .bold))
+                    .font(.system(size: 6, weight: .bold))
                     .frame(width: 14, height: 10)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(index > 0 ? Color.secondary : Color.gray.opacity(0.15))
+            .buttonStyle(.glass)
+            .controlSize(.mini)
             .disabled(index == 0)
 
             Button {
@@ -535,14 +553,43 @@ private struct ReorderButtons: View {
                 }
             } label: {
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 7, weight: .bold))
+                    .font(.system(size: 6, weight: .bold))
                     .frame(width: 14, height: 10)
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(index < total - 1 ? Color.secondary : Color.gray.opacity(0.15))
+            .buttonStyle(.glass)
+            .controlSize(.mini)
             .disabled(index >= total - 1)
         }
         .transition(.opacity)
+    }
+}
+
+// MARK: - Mini Glass Button
+
+private struct MiniGlassButton: View {
+    let icon: String
+    let color: Color
+    var disabled: Bool = false
+    let tip: String
+    var fontSize: CGFloat = 8
+    let action: () async -> Void
+    @State private var hovered = false
+
+    var body: some View {
+        Button {
+            Task { await action() }
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: fontSize, weight: .semibold))
+                .foregroundStyle(color)
+                .frame(width: 18, height: 18)
+        }
+        .buttonStyle(.glass)
+        .tint(hovered && !disabled ? color : nil)
+        .controlSize(.mini)
+        .disabled(disabled)
+        .help(tip)
+        .onHover { hovered = $0 }
     }
 }
 
@@ -562,67 +609,70 @@ struct HostCardHeader: View {
     @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 6) {
-            if isHovered && hostTotal > 1 {
-                ReorderButtons(index: hostIndex, total: hostTotal) { src, dst in
-                    manager.moveHost(from: src, to: dst)
-                }
-            }
-
-            Image(systemName: "server.rack")
-                .font(.system(size: 11, weight: .medium))
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(mounted > 0 ? .green : (isHovered ? .blue : .secondary))
-                .frame(width: 22, height: 22)
-                .contentTransition(.symbolEffect(.replace))
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(host.name)
-                    .font(.system(size: 12, weight: .semibold))
-                if host.hostname != host.name {
-                    Text(host.hostname)
-                        .font(.system(size: 9))
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                }
-            }
-
-            if let ms = latency { latencyBadge(ms: ms) }
-
-            Spacer()
-
-            if mounted > 0 {
-                Text("\(mounted)/\(volumeCount)")
-                    .font(.system(size: 9, weight: .bold, design: .rounded))
-                    .foregroundStyle(.green)
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .glassEffect(.clear.tint(.green), in: .capsule)
-            }
-
-            HStack(spacing: 2) {
-                actionButton(
-                    icon: "antenna.radiowaves.left.and.right", color: .blue, disabled: false,
-                    tip: "Check latency"
-                ) {
-                    await manager.checkLatency(hostName: host.name)
-                }
-                if mounted > 0 {
-                    actionButton(
-                        icon: "eject.fill", color: .orange, disabled: hostLoading,
-                        tip: "Unmount all"
-                    ) {
-                        for vol in volumes where vol.isMounted {
-                            await manager.unmountVolume(vol, hostName: host.name)
-                        }
+        GlassEffectContainer {
+            HStack(spacing: 6) {
+                if isHovered && hostTotal > 1 {
+                    ReorderButtons(index: hostIndex, total: hostTotal) { src, dst in
+                        manager.moveHost(from: src, to: dst)
                     }
                 }
-                if hasUnmounted {
-                    actionButton(
-                        icon: "bolt.fill", color: .green, disabled: hostLoading, tip: "Mount all"
+
+                Image(systemName: "server.rack")
+                    .font(.system(size: 12, weight: .medium))
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(mounted > 0 ? Color.green : (isHovered ? Color.blue : Color.gray))
+                    .frame(width: 28, height: 28)
+                    .glassEffect(.clear, in: .circle)
+                    .contentTransition(.symbolEffect(.replace))
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(host.name)
+                        .font(.system(size: 12, weight: .semibold))
+                    if host.hostname != host.name {
+                        Text(host.hostname)
+                            .font(.system(size: 9))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                    }
+                }
+
+                if let ms = latency { latencyBadge(ms: ms) }
+
+                Spacer()
+
+                if mounted > 0 {
+                    Text("\(mounted)/\(volumeCount)")
+                        .font(.system(size: 9, weight: .bold, design: .rounded))
+                        .foregroundStyle(.green)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .glassEffect(.clear.tint(.green), in: .capsule)
+                }
+
+                HStack(spacing: 2) {
+                    MiniGlassButton(
+                        icon: "antenna.radiowaves.left.and.right", color: .blue,
+                        tip: "Check latency"
                     ) {
-                        for vol in volumes where !vol.isMounted {
-                            await manager.mountVolume(vol, hostName: host.name)
+                        await manager.checkLatency(hostName: host.name)
+                    }
+                    if mounted > 0 {
+                        MiniGlassButton(
+                            icon: "eject.fill", color: .orange, disabled: hostLoading,
+                            tip: "Unmount all"
+                        ) {
+                            for vol in volumes where vol.isMounted {
+                                await manager.unmountVolume(vol, hostName: host.name)
+                            }
+                        }
+                    }
+                    if hasUnmounted {
+                        MiniGlassButton(
+                            icon: "bolt.fill", color: .green, disabled: hostLoading, tip: "Mount all"
+                        ) {
+                            for vol in volumes where !vol.isMounted {
+                                await manager.mountVolume(vol, hostName: host.name)
+                            }
                         }
                     }
                 }
@@ -635,15 +685,20 @@ struct HostCardHeader: View {
     private func latencyBadge(ms: Double) -> some View {
         Group {
             if ms < 0 {
-                HStack(spacing: 2) {
-                    Circle().fill(Color.red).frame(width: 5, height: 5)
+                HStack(spacing: 3) {
+                    Circle().fill(.clear).frame(width: 6, height: 6)
+                        .glassEffect(.clear.tint(.red), in: .circle)
                     Text("offline")
                         .font(.system(size: 8, weight: .medium))
                         .foregroundStyle(.red)
                 }
             } else {
-                HStack(spacing: 2) {
-                    Circle().fill(ms < 200 ? Color.green : Color.yellow).frame(width: 5, height: 5)
+                HStack(spacing: 3) {
+                    Circle().fill(.clear).frame(width: 6, height: 6)
+                        .glassEffect(
+                            .clear.tint(ms < 200 ? .green : .yellow),
+                            in: .circle
+                        )
                     Text("\(Int(ms))ms")
                         .font(.system(size: 8, weight: .medium, design: .monospaced))
                         .foregroundStyle(.secondary)
@@ -655,26 +710,6 @@ struct HostCardHeader: View {
         .glassEffect(.clear, in: .capsule)
     }
 
-    private func actionButton(
-        icon: String, color: Color, disabled: Bool, tip: String,
-        action: @escaping () async -> Void
-    ) -> some View {
-        Button {
-            Task { await action() }
-        } label: {
-            Image(systemName: icon)
-                .font(.system(size: 9, weight: .semibold))
-                .frame(width: 20, height: 20)
-        }
-        .buttonStyle(.borderless)
-        .foregroundStyle(
-            disabled
-                ? Color.gray.opacity(0.15)
-                : (isHovered ? color.opacity(0.8) : Color.gray.opacity(0.3))
-        )
-        .disabled(disabled)
-        .help(tip)
-    }
 }
 
 // MARK: - Volume Row
@@ -689,80 +724,81 @@ struct VolumeRow: View {
     @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            if isHovered && total > 1 {
-                ReorderButtons(index: index, total: total) { src, dst in
-                    manager.moveVolume(hostName: hostName, from: src, to: dst)
-                }
-            }
-
-            ZStack {
-                if volume.isMounted {
-                    Circle().fill(Color.green.opacity(0.2)).frame(width: 14, height: 14)
-                }
-                Circle()
-                    .fill(volume.isMounted ? Color.green : Color.gray.opacity(0.2))
-                    .frame(width: 7, height: 7)
-            }
-            .frame(width: 16)
-            .animation(.easeInOut(duration: 0.25), value: volume.isMounted)
-
-            if volume.isFavorite {
-                Image(systemName: "star.fill")
-                    .font(.system(size: 7))
-                    .foregroundStyle(.yellow)
-            }
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(volume.mountPoint)
-                    .font(.system(size: 11, design: .monospaced))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(volume.remotePath)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            .contentShape(Rectangle())
-            .onTapGesture { if volume.isMounted { manager.openInFinder(volume) } }
-
-            Spacer(minLength: 2)
-
-            if manager.loadingVolumes.contains(volume.id) {
-                ProgressView()
-                    .controlSize(.mini)
-                    .transition(.scale.combined(with: .opacity))
-            } else {
-                HStack(spacing: 2) {
-                    if isHovered {
-                        rowButton(
-                            icon: "doc.text", color: Color.gray.opacity(0.25), hoverColor: .blue,
-                            tip: "View log", fontSize: 9
-                        ) { onShowLog() }
+        GlassEffectContainer {
+            HStack(spacing: 8) {
+                if isHovered && total > 1 {
+                    ReorderButtons(index: index, total: total) { src, dst in
+                        manager.moveVolume(hostName: hostName, from: src, to: dst)
                     }
-                    if volume.isMounted {
-                        rowButton(
-                            icon: "folder", color: Color.gray.opacity(0.25), hoverColor: .blue,
-                            tip: "Open in Finder", fontSize: 9
-                        ) { manager.openInFinder(volume) }
-                        rowButton(
-                            icon: "eject.fill", color: .orange, hoverColor: .orange, tip: "Unmount"
-                        ) {
-                            await manager.unmountVolume(volume, hostName: hostName)
+                }
+
+                Circle()
+                    .fill(.clear)
+                    .frame(width: 8, height: 8)
+                    .glassEffect(
+                        volume.isMounted ? .clear.tint(.green) : .clear,
+                        in: .circle
+                    )
+                    .animation(.easeInOut(duration: 0.25), value: volume.isMounted)
+
+                if volume.isFavorite {
+                    Image(systemName: "star.fill")
+                        .font(.system(size: 7))
+                        .foregroundStyle(.yellow)
+                        .frame(width: 14, height: 14)
+                        .glassEffect(.clear.tint(.yellow), in: .circle)
+                }
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(volume.mountPoint)
+                        .font(.system(size: 11, design: .monospaced))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(volume.remotePath)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture { if volume.isMounted { manager.openInFinder(volume) } }
+
+                Spacer(minLength: 2)
+
+                if manager.loadingVolumes.contains(volume.id) {
+                    ProgressView()
+                        .controlSize(.mini)
+                        .transition(.scale.combined(with: .opacity))
+                } else {
+                    HStack(spacing: 2) {
+                        if isHovered {
+                            MiniGlassButton(
+                                icon: "doc.text", color: .blue,
+                                tip: "View log", fontSize: 9
+                            ) { onShowLog() }
                         }
-                    } else {
-                        rowButton(
-                            icon: "bolt.fill", color: Color.gray.opacity(0.25), hoverColor: .green,
-                            tip: "Mount"
-                        ) {
-                            await manager.mountVolume(volume, hostName: hostName)
-                        }
-                        rowButton(
-                            icon: "xmark", color: Color.gray.opacity(0.25), hoverColor: .red,
-                            tip: "Remove", fontSize: 8
-                        ) {
-                            await manager.removeVolume(volume, hostName: hostName)
+                        if volume.isMounted {
+                            MiniGlassButton(
+                                icon: "folder", color: .blue,
+                                tip: "Open in Finder", fontSize: 9
+                            ) { manager.openInFinder(volume) }
+                            MiniGlassButton(
+                                icon: "eject.fill", color: .orange, tip: "Unmount"
+                            ) {
+                                await manager.unmountVolume(volume, hostName: hostName)
+                            }
+                        } else {
+                            MiniGlassButton(
+                                icon: "bolt.fill", color: .green, tip: "Mount"
+                            ) {
+                                await manager.mountVolume(volume, hostName: hostName)
+                            }
+                            MiniGlassButton(
+                                icon: "xmark", color: .red,
+                                tip: "Remove", fontSize: 8
+                            ) {
+                                await manager.removeVolume(volume, hostName: hostName)
+                            }
                         }
                     }
                 }
@@ -770,10 +806,6 @@ struct VolumeRow: View {
         }
         .padding(.vertical, 2)
         .padding(.horizontal, 2)
-        .background(
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(isHovered ? Color.primary.opacity(0.04) : Color.clear)
-        )
         .contentShape(Rectangle())
         .onHover { h in withAnimation(.easeInOut(duration: 0.12)) { isHovered = h } }
         .contextMenu { volumeContextMenu }
@@ -827,23 +859,6 @@ struct VolumeRow: View {
         }
     }
 
-    private func rowButton(
-        icon: String, color: Color, hoverColor: Color, tip: String,
-        fontSize: CGFloat = 10,
-        action: @escaping () async -> Void
-    ) -> some View {
-        Button {
-            Task { await action() }
-        } label: {
-            Image(systemName: icon)
-                .font(.system(size: fontSize, weight: .medium))
-                .foregroundStyle(isHovered ? hoverColor : color)
-                .frame(width: 22, height: 22)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help(tip)
-    }
 }
 
 // MARK: - Log Viewer
@@ -863,23 +878,30 @@ struct LogViewerPanel: View {
     let content: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Image(systemName: "doc.text")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.blue)
-                Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
-            Divider()
-            ScrollView(.vertical, showsIndicators: true) {
-                Text(content)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+        GlassEffectContainer {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.blue)
+                    Text(title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .glassEffect(.clear, in: .capsule)
+
+                ScrollView(.vertical, showsIndicators: true) {
+                    Text(content)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(8)
+                }
+                .glassEffect(.clear, in: .rect(cornerRadius: 8))
             }
         }
         .padding(12)
