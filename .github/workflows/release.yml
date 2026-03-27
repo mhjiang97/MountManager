@@ -1,0 +1,57 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: |
+          xcodebuild -project MountManager.xcodeproj \
+            -scheme MountManager \
+            -configuration Release \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Create zip
+        run: |
+          cd build/DerivedData/Build/Products/Release
+          ditto -c -k --keepParent MountManager.app "$GITHUB_WORKSPACE/MountManager.zip"
+
+      - name: Compute SHA256
+        id: sha
+        run: |
+          SHA256=$(shasum -a 256 MountManager.zip | awk '{print $1}')
+          echo "sha256=$SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MountManager.zip
+          generate_release_notes: true
+
+      - name: Trigger Homebrew Tap update
+        run: |
+          curl --fail-with-body -X POST \
+            -H "Authorization: token ${{ secrets.TAP_GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/mhjiang97/homebrew-tap/dispatches \
+            -d '{"event_type":"update-cask","client_payload":{"version":"${{ steps.version.outputs.version }}","sha256":"${{ steps.sha.outputs.sha256 }}"}}'
