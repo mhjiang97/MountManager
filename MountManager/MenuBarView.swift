@@ -78,7 +78,7 @@ struct MenuBarView: View {
             footer
         }
         .frame(width: 360)
-        .frame(maxHeight: 580)
+        .frame(minHeight: 360, maxHeight: 580)
         .animation(.spring(duration: 0.3, bounce: 0.15), value: manager.hostVolumes)
         .animation(.spring(duration: 0.3, bounce: 0.15), value: showAddForm)
         .onChange(of: manager.appearanceMode) { _, mode in
@@ -203,7 +203,7 @@ struct MenuBarView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 32)
-        .glassEffect(.clear, in: .rect(cornerRadius: 12))
+        .glassEffect(.regular, in: .rect(cornerRadius: 12))
     }
 
     // MARK: - Host Card
@@ -242,7 +242,7 @@ struct MenuBarView: View {
             .padding(.bottom, 2)
         }
         .glassEffect(
-            allMounted ? .clear.tint(.green.opacity(0.15)) : .clear,
+            allMounted ? .regular.tint(.green.opacity(0.15)) : .regular,
             in: .rect(cornerRadius: 12)
         )
     }
@@ -285,7 +285,7 @@ struct MenuBarView: View {
                     .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
             }
         }
-        .glassEffect(.clear, in: .rect(cornerRadius: 12))
+        .glassEffect(.regular, in: .rect(cornerRadius: 12))
     }
 
     private var addFormContent: some View {
@@ -707,73 +707,71 @@ struct HostCardHeader: View {
     @State private var isHovered = false
 
     var body: some View {
-        GlassEffectContainer {
-            HStack(spacing: 6) {
-                if isHovered && hostTotal > 1 {
-                    ReorderButtons(index: hostIndex, total: hostTotal) { src, dst in
-                        manager.moveHost(from: src, to: dst)
-                    }
+        HStack(spacing: 6) {
+            if isHovered && hostTotal > 1 {
+                ReorderButtons(index: hostIndex, total: hostTotal) { src, dst in
+                    manager.moveHost(from: src, to: dst)
                 }
+            }
 
-                Image(systemName: "server.rack")
-                    .font(.system(size: 12, weight: .medium))
-                    .symbolRenderingMode(.hierarchical)
-                    .foregroundStyle(
-                        mounted > 0 ? Color.green : (isHovered ? Color.blue : Color.gray)
-                    )
-                    .frame(width: 28, height: 28)
-                    .glassEffect(.clear, in: .circle)
-                    .contentTransition(.symbolEffect(.replace))
+            Image(systemName: "server.rack")
+                .font(.system(size: 12, weight: .medium))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(
+                    mounted > 0 ? Color.green : (isHovered ? Color.blue : Color.gray)
+                )
+                .frame(width: 28, height: 28)
+                .glassEffect(.clear, in: .circle)
+                .contentTransition(.symbolEffect(.replace))
 
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(host.name)
-                        .font(.system(size: 12, weight: .semibold))
-                    if host.hostname != host.name {
-                        Text(host.hostname)
-                            .font(.system(size: 9))
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                    }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(host.name)
+                    .font(.system(size: 12, weight: .semibold))
+                if host.hostname != host.name {
+                    Text(host.hostname)
+                        .font(.system(size: 9))
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
                 }
+            }
 
-                if let ms = latency { latencyBadge(ms: ms) }
+            if let ms = latency { latencyBadge(ms: ms) }
 
-                Spacer()
+            Spacer()
 
+            if mounted > 0 {
+                Text("\(mounted)/\(volumeCount)")
+                    .font(.system(size: 9, weight: .bold, design: .rounded))
+                    .foregroundStyle(.green)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .glassEffect(.clear.tint(.green), in: .capsule)
+            }
+
+            HStack(spacing: 2) {
+                MiniGlassButton(
+                    icon: "antenna.radiowaves.left.and.right", color: .blue,
+                    tip: "Check latency"
+                ) {
+                    await manager.checkLatency(hostName: host.name)
+                }
                 if mounted > 0 {
-                    Text("\(mounted)/\(volumeCount)")
-                        .font(.system(size: 9, weight: .bold, design: .rounded))
-                        .foregroundStyle(.green)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .glassEffect(.clear.tint(.green), in: .capsule)
-                }
-
-                HStack(spacing: 2) {
                     MiniGlassButton(
-                        icon: "antenna.radiowaves.left.and.right", color: .blue,
-                        tip: "Check latency"
+                        icon: "eject.fill", color: .orange, disabled: hostLoading,
+                        tip: "Unmount all"
                     ) {
-                        await manager.checkLatency(hostName: host.name)
-                    }
-                    if mounted > 0 {
-                        MiniGlassButton(
-                            icon: "eject.fill", color: .orange, disabled: hostLoading,
-                            tip: "Unmount all"
-                        ) {
-                            for vol in volumes where vol.isMounted {
-                                await manager.unmountVolume(vol, hostName: host.name)
-                            }
+                        for vol in volumes where vol.isMounted {
+                            await manager.unmountVolume(vol, hostName: host.name)
                         }
                     }
-                    if hasUnmounted {
-                        MiniGlassButton(
-                            icon: "bolt.fill", color: .green, disabled: hostLoading,
-                            tip: "Mount all"
-                        ) {
-                            for vol in volumes where !vol.isMounted {
-                                await manager.mountVolume(vol, hostName: host.name)
-                            }
+                }
+                if hasUnmounted {
+                    MiniGlassButton(
+                        icon: "bolt.fill", color: .green, disabled: hostLoading,
+                        tip: "Mount all"
+                    ) {
+                        for vol in volumes where !vol.isMounted {
+                            await manager.mountVolume(vol, hostName: host.name)
                         }
                     }
                 }
